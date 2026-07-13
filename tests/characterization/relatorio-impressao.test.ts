@@ -74,10 +74,10 @@ describe("montarHtmlRelatorio — CSS de quebra de página e cabeçalho de grupo
 
   it("coloca o nome e a quantidade da rota DENTRO do <thead> com colspan", () => {
     expect(html).toMatch(
-      /<thead><tr class="grupo-head"><th colspan="2">V1_AM1 &mdash; 2 registros<\/th>/,
+      /<thead><tr class="grupo-head"><th colspan="2">V1_AM1 — 2 registros<\/th>/,
     );
     expect(html).toMatch(
-      /<thead><tr class="grupo-head"><th colspan="2">K1_AM1 &mdash; 1 registro<\/th>/,
+      /<thead><tr class="grupo-head"><th colspan="2">K1_AM1 — 1 registro<\/th>/,
     );
   });
 
