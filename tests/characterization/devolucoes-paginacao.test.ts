@@ -4,7 +4,7 @@ import {
   DEVOLUCOES_PAGE,
   filtrarDevolucoesPorRota,
   normalizarRotaDevolucao,
-} from "@/lib/devolucoes.functions";
+} from "../../src/lib/devolucoes.functions";
 
 type Row = { id: string; devolvido_em: string };
 

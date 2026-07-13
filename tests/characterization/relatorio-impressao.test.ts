@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { montarHtmlRelatorio, montarLinhasTriagemRota } from "@/lib/relatorio";
+import { montarHtmlRelatorio, montarLinhasTriagemRota } from "../../src/lib/relatorio";
 
 // Test C — Triagem: 239 faltantes + 10 triados na rota selecionada.
 // Uma "outra rota" com IDs diferentes NÃO deve aparecer no relatório.
