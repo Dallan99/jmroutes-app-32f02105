@@ -7,6 +7,8 @@ import {
   listarDevolucoes,
   cancelarDevolucao,
   MOTIVOS,
+  normalizarRotaDevolucao,
+  filtrarDevolucoesPorRota,
   type MotivoDevolucao,
   type RegistrarDevolucaoResult,
 } from "@/lib/devolucoes.functions";
@@ -160,6 +162,18 @@ function DevolucoesPage() {
     return map;
   }, [lista.data]);
 
+  type LinhaDev = NonNullable<typeof lista.data>[number];
+
+  const colunasDevolucao = [
+    { header: "Hora", value: (d: LinhaDev) => new Date(d.devolvido_em).toLocaleTimeString("pt-BR") },
+    { header: "ID do produto", value: (d: LinhaDev) => d.shipment_codigo },
+    { header: "Rota", value: (d: LinhaDev) => d.rota ?? "" },
+    { header: "Motorista", value: (d: LinhaDev) => d.motorista ?? "" },
+    { header: "Motivo", value: (d: LinhaDev) => MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo },
+    { header: "Operador", value: (d: LinhaDev) => d.operador_nome ?? "" },
+    { header: "Observação", value: (d: LinhaDev) => d.observacao ?? "" },
+  ] as const;
+
   const relatorioConfig = () => {
     const linhas = (lista.data ?? []).filter((d) => !d.cancelado);
     return {
@@ -173,15 +187,7 @@ function DevolucoesPage() {
           value: linhas.filter((l) => l.motivo === m.value).length,
         })).filter((k) => Number(k.value) > 0),
       ],
-      colunas: [
-        { header: "Hora", value: (d: (typeof linhas)[number]) => new Date(d.devolvido_em).toLocaleTimeString("pt-BR") },
-        { header: "ID do produto", value: (d: (typeof linhas)[number]) => d.shipment_codigo },
-        { header: "Rota", value: (d: (typeof linhas)[number]) => d.rota ?? "" },
-        { header: "Motorista", value: (d: (typeof linhas)[number]) => d.motorista ?? "" },
-        { header: "Motivo", value: (d: (typeof linhas)[number]) => MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo },
-        { header: "Operador", value: (d: (typeof linhas)[number]) => d.operador_nome ?? "" },
-        { header: "Observação", value: (d: (typeof linhas)[number]) => d.observacao ?? "" },
-      ],
+      colunas: [...colunasDevolucao],
       linhas,
     };
   };
@@ -195,11 +201,71 @@ function DevolucoesPage() {
       ...cfg,
       titulo: "Devoluções agrupadas por rota",
       autoPrint: true,
-      agruparPor: (d) => d.rota ?? "(sem rota)",
+      agruparPor: (d) => normalizarRotaDevolucao(d.rota) ?? "(sem rota)",
     });
     if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
   };
   const baixarCsv = () => baixarCSV(relatorioConfig());
+
+  const [rotaDialogOpen, setRotaDialogOpen] = useState(false);
+  const [rotaBusca, setRotaBusca] = useState("");
+
+  type GrupoRota = { chave: string; rotaAlvo: string | null; label: string; total: number };
+  const gruposPorRota = useMemo<GrupoRota[]>(() => {
+    const linhas = (lista.data ?? []).filter((d) => !d.cancelado);
+    const map = new Map<string, GrupoRota>();
+    for (const l of linhas) {
+      const norm = normalizarRotaDevolucao(l.rota);
+      const chave = norm ?? "__sem_rota__";
+      const existente = map.get(chave);
+      if (existente) {
+        existente.total += 1;
+      } else {
+        map.set(chave, {
+          chave,
+          rotaAlvo: norm,
+          label: norm ?? "Sem rota",
+          total: 1,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "pt-BR", { numeric: true }),
+    );
+  }, [lista.data]);
+
+  const gruposFiltrados = useMemo(() => {
+    const q = rotaBusca.trim().toUpperCase();
+    if (!q) return gruposPorRota;
+    return gruposPorRota.filter((g) => g.label.toUpperCase().includes(q));
+  }, [gruposPorRota, rotaBusca]);
+
+  const configRota = (grupo: GrupoRota) => {
+    const linhas = filtrarDevolucoesPorRota(lista.data ?? [], grupo.rotaAlvo);
+    const motivosTotais = MOTIVOS.map((m) => ({
+      label: m.label,
+      value: linhas.filter((l) => l.motivo === m.value).length,
+    })).filter((k) => Number(k.value) > 0);
+    return {
+      titulo: "Relatório de Devoluções por Rota",
+      subtitulo: `${base?.nome ?? ""}${base?.codigo ? ` (${base.codigo})` : ""} · ${diaAtivo ? new Date(diaAtivo + "T00:00:00").toLocaleDateString("pt-BR") : ""} · Rota ${grupo.label}`,
+      nomeArquivo: `devolucoes_${base?.codigo ?? "base"}_${diaAtivo ?? ""}_${grupo.label.replace(/\s+/g, "_")}`,
+      kpis: [
+        { label: "Total de registros", value: linhas.length },
+        { label: "Rota", value: grupo.label },
+        ...motivosTotais,
+      ],
+      colunas: [...colunasDevolucao],
+      linhas,
+    };
+  };
+
+  const imprimirRotaEspecifica = (grupo: GrupoRota) => {
+    const ok = abrirRelatorio({ ...configRota(grupo), autoPrint: true });
+    if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
+  };
+  const baixarCsvRota = (grupo: GrupoRota) => baixarCSV(configRota(grupo));
+
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
@@ -264,6 +330,9 @@ function DevolucoesPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={imprimirPorRota}>
                 <Printer className="w-4 h-4 mr-2" /> Imprimir agrupado por rota
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setRotaBusca(""); setRotaDialogOpen(true); }}>
+                <Printer className="w-4 h-4 mr-2" /> Imprimir uma rota…
               </DropdownMenuItem>
               <DropdownMenuItem onClick={baixarCsv}>
                 <Download className="w-4 h-4 mr-2" /> Baixar CSV
@@ -412,6 +481,56 @@ function DevolucoesPage() {
             <Button onClick={() => registrar.mutate()} disabled={registrar.isPending}>
               {registrar.isPending ? "Salvando…" : (<><CheckCircle2 className="w-4 h-4 mr-1" /> Confirmar devolução</>)}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rotaDialogOpen} onOpenChange={setRotaDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Imprimir uma rota</DialogTitle>
+            <DialogDescription>
+              Escolha a rota do dia {diaAtivo ? new Date(diaAtivo + "T00:00:00").toLocaleDateString("pt-BR") : ""} — base {base?.codigo ?? "?"}. Cancelados são ignorados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={rotaBusca}
+              onChange={(e) => setRotaBusca(e.target.value)}
+              placeholder="Buscar rota (ex.: V1_AM1)"
+              className="font-mono"
+            />
+            {gruposFiltrados.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-6 text-center border rounded-md">
+                {gruposPorRota.length === 0
+                  ? "Nenhuma devolução válida para este dia/base."
+                  : "Nenhuma rota corresponde à busca."}
+              </div>
+            ) : (
+              <div className="divide-y border rounded-md">
+                {gruposFiltrados.map((g) => (
+                  <div key={g.chave} className="flex items-center justify-between gap-2 p-2.5">
+                    <div className="min-w-0">
+                      <div className="font-mono font-semibold truncate">{g.label}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {g.total} {g.total === 1 ? "devolução" : "devoluções"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => imprimirRotaEspecifica(g)} className="h-8 gap-1 text-xs">
+                        <Printer className="w-3 h-3" /> Imprimir
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => baixarCsvRota(g)} className="h-8 gap-1 text-xs">
+                        <Download className="w-3 h-3" /> CSV
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRotaDialogOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

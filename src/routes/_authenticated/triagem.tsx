@@ -42,7 +42,7 @@ import {
   Copy,
 } from "lucide-react";
 import { toast } from "sonner";
-import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
+import { abrirRelatorio, baixarCSV, montarLinhasTriagemRota, type TriagemLinhaImpressao } from "@/lib/relatorio";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -370,6 +370,39 @@ function TriagemPage() {
   const baixarCsv = () => baixarCSV(relatorioConfig());
   const printSession = baixarPDF;
 
+  const imprimirDetalheRota = useCallback(
+    (
+      rota: string,
+      detalhe: { pendentes: Array<{ shipment: string; cidade: string | null }>; triados: Array<{ shipment: string; cidade: string | null }> },
+    ) => {
+      const linhas = montarLinhasTriagemRota(detalhe);
+      const totalRota = linhas.length;
+      const totalTriados = detalhe.triados.length;
+      const totalPendentes = detalhe.pendentes.length;
+      const pctRota = totalRota ? Math.round((totalTriados / totalRota) * 100) : 0;
+      const ok = abrirRelatorio<TriagemLinhaImpressao>({
+        titulo: `Triagem — Rota ${rota}`,
+        subtitulo: `${base?.nome ?? ""} · ${dataOperacional ? new Date(dataOperacional + "T00:00:00").toLocaleDateString("pt-BR") : ""}`,
+        nomeArquivo: `triagem_rota_${rota}_${dataOperacional}`,
+        kpis: [
+          { label: "Total da rota", value: totalRota },
+          { label: "Triados", value: totalTriados },
+          { label: "Pendentes", value: totalPendentes },
+          { label: "Conclusão", value: `${pctRota}%` },
+        ],
+        colunas: [
+          { header: "ID (Shipment)", value: (l) => l.shipment },
+          { header: "Cidade", value: (l) => l.cidade ?? "" },
+          { header: "Status", value: (l) => (l.status === "triado" ? "Triado" : "Pendente") },
+        ],
+        linhas,
+        autoPrint: true,
+      });
+      if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
+    },
+    [base?.nome, dataOperacional],
+  );
+
   const imprimirRotaSelecionada = async () => {
     if (!rotaSelecionada) {
       toast.warning("Selecione uma rota para imprimir seus IDs.");
@@ -387,36 +420,12 @@ function TriagemPage() {
       }
     }
     if (!detalhe) return;
-    type Linha = { shipment: string; cidade: string | null; status: "triado" | "pendente" };
-    const linhas: Linha[] = [
-      ...detalhe.triados.map((t) => ({ ...t, status: "triado" as const })),
-      ...detalhe.pendentes.map((p) => ({ ...p, status: "pendente" as const })),
-    ];
-    const totalRota = linhas.length;
-    const totalTriados = detalhe.triados.length;
-    const totalPendentes = detalhe.pendentes.length;
-    const pctRota = totalRota
-      ? Math.round((totalTriados / totalRota) * 100)
-      : 0;
-    const ok = abrirRelatorio<Linha>({
-      titulo: `Triagem — Rota ${rotaSelecionada}`,
-      subtitulo: `${base?.nome ?? ""} · ${dataOperacional ? new Date(dataOperacional + "T00:00:00").toLocaleDateString("pt-BR") : ""}`,
-      nomeArquivo: `triagem_rota_${rotaSelecionada}_${dataOperacional}`,
-      kpis: [
-        { label: "Total da rota", value: totalRota },
-        { label: "Triados", value: totalTriados },
-        { label: "Pendentes", value: totalPendentes },
-        { label: "Conclusão", value: `${pctRota}%` },
-      ],
-      colunas: [
-        { header: "ID (Shipment)", value: (l: Linha) => l.shipment },
-        { header: "Cidade", value: (l: Linha) => l.cidade ?? "" },
-        { header: "Status", value: (l: Linha) => (l.status === "triado" ? "Triado" : "Pendente") },
-      ],
-      linhas,
-      autoPrint: true,
-    });
-    if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
+    imprimirDetalheRota(rotaSelecionada, detalhe);
+  };
+
+  const imprimirDetalheModal = () => {
+    if (!rotaDetalhe || !detalheQuery.data) return;
+    imprimirDetalheRota(rotaDetalhe, detalheQuery.data);
   };
 
   const pauseSession = () => {
@@ -624,6 +633,7 @@ function TriagemPage() {
         onClose={() => setRotaDetalhe(null)}
         data={detalheQuery.data}
         loading={detalheQuery.isFetching}
+        onImprimir={imprimirDetalheModal}
       />
     </div>
   );
@@ -880,6 +890,7 @@ function RotaDetalheDialog({
   onClose,
   data,
   loading,
+  onImprimir,
 }: {
   rota: string | null;
   onClose: () => void;
@@ -891,6 +902,7 @@ function RotaDetalheDialog({
       }
     | undefined;
   loading: boolean;
+  onImprimir: () => void;
 }) {
   const copiar = () => {
     if (!data) return;
@@ -900,6 +912,7 @@ function RotaDetalheDialog({
       () => toast.error("Não foi possível copiar."),
     );
   };
+  const podeImprimir = !!data && !loading;
   return (
     <Dialog open={!!rota} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -914,15 +927,26 @@ function RotaDetalheDialog({
         ) : !data ? null : (
           <div className="grid md:grid-cols-2 gap-4">
             <div className="min-w-0">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <div className="text-xs uppercase tracking-wider font-semibold text-warning">
                   Faltando ({data.pendentes.length})
                 </div>
-                {data.pendentes.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={copiar} className="h-7 gap-1 text-xs">
-                    <Copy className="w-3 h-3" /> Copiar
+                <div className="flex items-center gap-1">
+                  {data.pendentes.length > 0 && (
+                    <Button size="sm" variant="ghost" onClick={copiar} className="h-7 gap-1 text-xs">
+                      <Copy className="w-3 h-3" /> Copiar
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onImprimir}
+                    disabled={!podeImprimir}
+                    className="h-7 gap-1 text-xs"
+                  >
+                    <Printer className="w-3 h-3" /> Imprimir rota
                   </Button>
-                )}
+                </div>
               </div>
               <div className="border rounded-md max-h-[32vh] md:max-h-[50vh] overflow-auto divide-y">
                 {data.pendentes.length === 0 ? (
@@ -958,10 +982,20 @@ function RotaDetalheDialog({
             </div>
           </div>
         )}
+        <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3">
+          <Button
+            onClick={onImprimir}
+            disabled={!podeImprimir}
+            className="gap-2"
+          >
+            <Printer className="w-4 h-4" /> Imprimir rota
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
+
 
 function Row({
   r,

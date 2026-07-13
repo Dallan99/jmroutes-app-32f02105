@@ -136,6 +136,63 @@ export const registrarDevolucao = createServerFn({ method: "POST" })
     };
   });
 
+/** Página do PostgREST — limite duro de 1000 registros por consulta. */
+export const DEVOLUCOES_PAGE = 1000;
+/** Proteção contra loop infinito: até 100 páginas (1M registros). */
+export const DEVOLUCOES_MAX_PAGES = 100;
+
+export type PaginaDevolucao = {
+  data: unknown[] | null;
+  error: { message: string } | null;
+};
+
+/**
+ * Paginador puro/testável. Chama `fetchPage(from, to)` em loop com PAGE=1000,
+ * acumula tudo em ordem estável e para apenas quando a página retorna menos
+ * que PAGE. Se qualquer página retornar `error`, aborta imediatamente. Não
+ * aplica slice, limit final ou deduplicação.
+ */
+export async function paginarTodasDevolucoes<T>(
+  fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+  page: number = DEVOLUCOES_PAGE,
+  maxPages: number = DEVOLUCOES_MAX_PAGES,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < maxPages; i++) {
+    const from = i * page;
+    const to = from + page - 1;
+    const { data: rows, error } = await fetchPage(from, to);
+    if (error) throw new Error(error.message);
+    if (!rows || rows.length === 0) return out;
+    out.push(...rows);
+    if (rows.length < page) return out;
+  }
+  throw new Error(
+    `Limite técnico de ${maxPages} páginas atingido em listarDevolucoes (mais de ${maxPages * page} registros). Ajuste o filtro de dia/base.`,
+  );
+}
+
+/**
+ * Filtro puro para "Imprimir uma rota": só devoluções válidas (não canceladas)
+ * cuja rota normalizada (trim + upperCase) bate com a rota escolhida. Passe
+ * `null` para o grupo "(sem rota)".
+ */
+export function normalizarRotaDevolucao(rota: string | null | undefined): string | null {
+  if (rota === null || rota === undefined) return null;
+  const s = rota.trim().toUpperCase();
+  return s.length === 0 ? null : s;
+}
+
+export function filtrarDevolucoesPorRota<T extends { rota: string | null; cancelado: boolean }>(
+  linhas: T[],
+  rotaAlvo: string | null,
+): T[] {
+  const alvo = rotaAlvo === null ? null : normalizarRotaDevolucao(rotaAlvo);
+  return linhas.filter(
+    (l) => !l.cancelado && normalizarRotaDevolucao(l.rota) === alvo,
+  );
+}
+
 export const listarDevolucoes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
@@ -150,21 +207,40 @@ export const listarDevolucoes = createServerFn({ method: "POST" })
     const inicioMs = Date.parse(`${data.diaOperacional}T03:00:00Z`);
     const inicio = new Date(inicioMs).toISOString();
     const fim = new Date(inicioMs + 24 * 3600 * 1000 - 1).toISOString();
-    const { data: rows, error } = await supabase
-      .from("devolucoes")
-      .select("id, shipment_codigo, motivo, observacao, rota, motorista, devolvido_em, cancelado, devolvido_por")
-      .eq("base_id", data.baseId)
-      .gte("devolvido_em", inicio)
-      .lte("devolvido_em", fim)
-      .order("devolvido_em", { ascending: false });
-    if (error) throw new Error(error.message);
-    const userIds = Array.from(new Set((rows ?? []).map((r) => r.devolvido_por).filter(Boolean)));
+
+    type Row = {
+      id: string;
+      shipment_codigo: string;
+      motivo: string;
+      observacao: string | null;
+      rota: string | null;
+      motorista: string | null;
+      devolvido_em: string;
+      cancelado: boolean;
+      devolvido_por: string | null;
+    };
+
+    const rows = await paginarTodasDevolucoes<Row>((from, to) =>
+      supabase
+        .from("devolucoes")
+        .select(
+          "id, shipment_codigo, motivo, observacao, rota, motorista, devolvido_em, cancelado, devolvido_por",
+        )
+        .eq("base_id", data.baseId)
+        .gte("devolvido_em", inicio)
+        .lte("devolvido_em", fim)
+        .order("devolvido_em", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to) as unknown as Promise<{ data: Row[] | null; error: { message: string } | null }>,
+    );
+
+    const userIds = Array.from(new Set(rows.map((r) => r.devolvido_por).filter(Boolean))) as string[];
     const nomes = new Map<string, string>();
     if (userIds.length > 0) {
       const { data: profs } = await supabase.from("profiles").select("id, nome").in("id", userIds);
-      (profs ?? []).forEach((p) => nomes.set(p.id, p.nome));
+      (profs ?? []).forEach((p) => nomes.set(p.id as string, p.nome as string));
     }
-    return (rows ?? []).map((r) => ({
+    return rows.map((r) => ({
       id: r.id,
       shipment_codigo: r.shipment_codigo,
       motivo: r.motivo as MotivoDevolucao,
