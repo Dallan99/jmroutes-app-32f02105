@@ -24,6 +24,14 @@ export type RelatorioOptions<T> = {
    * ["Conferente", "Motorista / Responsável"].
    */
   assinaturas?: RelatorioAssinatura[] | false;
+  /**
+   * Quando definido, o corpo do relatório é dividido em seções por chave.
+   * Cada seção inclui o nome do grupo, um resumo (contagem) e sua própria
+   * tabela. Todas as linhas continuam sendo exportadas 100% no CSV.
+   */
+  agruparPor?: (row: T) => string | null | undefined;
+  /** Rótulo da coluna virtual usada no CSV para identificar o grupo. */
+  agruparColunaCsv?: string;
 };
 
 function csvEscape(v: unknown): string {
@@ -120,17 +128,54 @@ export function abrirRelatorio<T>(opts: RelatorioOptions<T>): boolean {
     .join("");
 
   const thead = opts.colunas.map((c) => `<th>${escapeHtml(c.header)}</th>`).join("");
-  const tbody =
-    opts.linhas.length === 0
-      ? `<tr><td colspan="${opts.colunas.length}" style="text-align:center;color:#888;padding:24px">Sem dados</td></tr>`
-      : opts.linhas
-          .map(
-            (r) =>
-              `<tr>${opts.colunas
-                .map((c) => `<td>${escapeHtml(c.value(r))}</td>`)
-                .join("")}</tr>`,
-          )
-          .join("");
+
+  const renderTable = (linhas: T[]) => {
+    if (linhas.length === 0) {
+      return `<table><thead><tr>${thead}</tr></thead><tbody><tr><td colspan="${opts.colunas.length}" style="text-align:center;color:#888;padding:24px">Sem dados</td></tr></tbody></table>`;
+    }
+    const body = linhas
+      .map(
+        (r) =>
+          `<tr>${opts.colunas
+            .map((c) => `<td>${escapeHtml(c.value(r))}</td>`)
+            .join("")}</tr>`,
+      )
+      .join("");
+    return `<table><thead><tr>${thead}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+
+  let corpoHtml: string;
+  if (opts.agruparPor) {
+    const grupos = new Map<string, T[]>();
+    for (const row of opts.linhas) {
+      const chave = (opts.agruparPor(row) ?? "").toString().trim() || "(sem rota)";
+      const arr = grupos.get(chave) ?? [];
+      arr.push(row);
+      grupos.set(chave, arr);
+    }
+    if (grupos.size === 0) {
+      corpoHtml = renderTable([]);
+    } else {
+      const ordenadas = Array.from(grupos.entries()).sort((a, b) =>
+        a[0].localeCompare(b[0], "pt-BR", { numeric: true }),
+      );
+      corpoHtml = ordenadas
+        .map(
+          ([chave, linhas]) => `
+          <section class="grupo">
+            <div class="grupo-head">
+              <span class="grupo-nome">${escapeHtml(chave)}</span>
+              <span class="grupo-count">${linhas.length} ${linhas.length === 1 ? "registro" : "registros"}</span>
+            </div>
+            ${renderTable(linhas)}
+          </section>`,
+        )
+        .join("");
+    }
+  } else {
+    corpoHtml = renderTable(opts.linhas);
+  }
+
 
   const assinaturasList: RelatorioAssinatura[] | null =
     opts.assinaturas === false
@@ -173,6 +218,10 @@ export function abrirRelatorio<T>(opts: RelatorioOptions<T>): boolean {
   th,td{border-bottom:1px solid #e5e7eb;padding:8px 10px;text-align:left;vertical-align:top}
   th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#374151}
   tr:nth-child(even) td{background:#fafafa}
+  .grupo{margin:18px 0 8px;page-break-inside:avoid}
+  .grupo-head{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 6px;padding:6px 10px;background:#111827;color:#fff;border-radius:6px}
+  .grupo-nome{font-weight:700;letter-spacing:.03em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .grupo-count{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#d1d5db}
   .signatures{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:36px;margin-top:56px;page-break-inside:avoid}
   .sig{display:flex;flex-direction:column;align-items:center;text-align:center}
   .sig-line{width:100%;min-height:22px;border-bottom:1px solid #111;font-size:12px;color:#111;padding:0 6px 4px}
@@ -195,7 +244,7 @@ export function abrirRelatorio<T>(opts: RelatorioOptions<T>): boolean {
   ${opts.subtitulo ? `<div class="sub">${escapeHtml(opts.subtitulo)}</div>` : ""}
   <div class="meta">Gerado em ${escapeHtml(geradoEm)}</div>
   ${kpisHtml ? `<div class="kpis">${kpisHtml}</div>` : ""}
-  <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>
+  ${corpoHtml}
   ${assinaturasHtml}
 </div>
 <script>
