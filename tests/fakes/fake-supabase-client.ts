@@ -26,6 +26,12 @@
  *  - Semântica da Data API (PostgREST).
  *  - Performance.
  *
+ * SEMÂNTICA DE nextError (contrato):
+ *  - Quando `nextError` está configurado e a próxima operação é da op
+ *    correspondente, a operação NÃO produz efeito nas linhas: insert não
+ *    adiciona, update não altera, delete não remove. O erro retorna em
+ *    `error` e é consumido uma única vez.
+ *
  * Regra: nunca escrever no fake um comportamento apenas "esperado".
  * Cada tabela e cada retorno modelado abaixo referencia a evidência
  * (arquivo + linhas ou migration) usada para configurá-lo.
@@ -42,9 +48,9 @@ export type CallLogEntry = {
 
 export type TableConfig = {
   rows: FakeRow[];
-  /** Erro forçado na próxima op (consumido uma vez). */
+  /** Erro forçado na próxima op (consumido uma vez, sem aplicar side-effect). */
   nextError?: { op: CallLogEntry["op"]; error: { message: string; code?: string } };
-  /** Hook chamado após cada op (usado em testes de corrida). */
+  /** Hook chamado após cada op bem-sucedida (usado em testes de corrida). */
   onOp?: (op: CallLogEntry["op"], ctx: FakeSupabase) => void;
 };
 
@@ -69,15 +75,26 @@ export class FakeSupabase {
     const applyFilters = (rows: FakeRow[]) =>
       rows.filter((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
 
-    const finalize = <T>(value: T) => {
-      self.calls.push({ table, op: state.op, filters: { ...filters }, payload: state.payload });
+    /**
+     * Consome nextError sem aplicar side-effect. Retorna a resposta de erro
+     * quando o próximo erro está armado para a op atual, caso contrário null.
+     */
+    const consumeErrorIfArmed = () => {
       const cfg = self.tbl(table);
       if (cfg.nextError && cfg.nextError.op === state.op) {
         const err = cfg.nextError.error;
         cfg.nextError = undefined;
-        return Promise.resolve({ data: null, error: err, count: null } as unknown as T);
+        return { data: null, error: err, count: null };
       }
-      cfg.onOp?.(state.op, self);
+      return null;
+    };
+
+    const finalize = <T>(compute: () => T) => {
+      self.calls.push({ table, op: state.op, filters: { ...filters }, payload: state.payload });
+      const errResp = consumeErrorIfArmed();
+      if (errResp) return Promise.resolve(errResp as unknown as T);
+      const value = compute();
+      self.tbl(table).onOp?.(state.op, self);
       return Promise.resolve(value);
     };
 
@@ -90,9 +107,6 @@ export class FakeSupabase {
       insert(payload: unknown) {
         state.op = "insert";
         state.payload = payload;
-        const cfg = self.tbl(table);
-        const arr = Array.isArray(payload) ? payload : [payload];
-        cfg.rows.push(...(arr as FakeRow[]));
         return builder;
       },
       update(payload: unknown) {
@@ -118,37 +132,55 @@ export class FakeSupabase {
         return builder;
       },
       maybeSingle() {
-        const cfg = self.tbl(table);
-        const rows = applyFilters(cfg.rows);
-        const row = rows[0] ?? null;
-        if (state.op === "update" && row) Object.assign(row, state.payload as FakeRow);
-        if (state.op === "delete") {
-          cfg.rows = cfg.rows.filter((r) => !rows.includes(r));
-          return finalize({ data: null, error: null });
-        }
-        return finalize({ data: row, error: null });
+        return finalize(() => {
+          const cfg = self.tbl(table);
+          if (state.op === "insert") {
+            const arr = Array.isArray(state.payload)
+              ? (state.payload as FakeRow[])
+              : [state.payload as FakeRow];
+            cfg.rows.push(...arr);
+            return { data: arr[0] ?? null, error: null };
+          }
+          const rows = applyFilters(cfg.rows);
+          const row = rows[0] ?? null;
+          if (state.op === "update" && row) {
+            Object.assign(row, state.payload as FakeRow);
+          }
+          if (state.op === "delete") {
+            cfg.rows = cfg.rows.filter((r) => !rows.includes(r));
+            return { data: null, error: null };
+          }
+          return { data: row, error: null };
+        });
       },
       single() {
         return builder.maybeSingle();
       },
       then(onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) {
-        const cfg = self.tbl(table);
-        const rows = applyFilters(cfg.rows);
-        if (state.op === "update") {
-          rows.forEach((r) => Object.assign(r, state.payload as FakeRow));
-          return finalize({ data: rows, error: null }).then(onFulfilled, onRejected);
-        }
-        if (state.op === "delete") {
-          cfg.rows = cfg.rows.filter((r) => !rows.includes(r));
-          return finalize({ data: null, error: null }).then(onFulfilled, onRejected);
-        }
-        if (state.op === "insert") {
-          return finalize({ data: state.payload, error: null }).then(onFulfilled, onRejected);
-        }
-        // select simples: retorna array + count quando pedido
-        const opts = (builder as any)._selectOpts as { count?: string; head?: boolean } | undefined;
-        const count = opts?.count ? rows.length : null;
-        return finalize({ data: rows, error: null, count }).then(onFulfilled, onRejected);
+        return finalize(() => {
+          const cfg = self.tbl(table);
+          if (state.op === "insert") {
+            const arr = Array.isArray(state.payload)
+              ? (state.payload as FakeRow[])
+              : [state.payload as FakeRow];
+            cfg.rows.push(...arr);
+            return { data: state.payload, error: null };
+          }
+          const rows = applyFilters(cfg.rows);
+          if (state.op === "update") {
+            rows.forEach((r) => Object.assign(r, state.payload as FakeRow));
+            return { data: rows, error: null };
+          }
+          if (state.op === "delete") {
+            cfg.rows = cfg.rows.filter((r) => !rows.includes(r));
+            return { data: null, error: null };
+          }
+          const opts = (builder as any)._selectOpts as
+            | { count?: string; head?: boolean }
+            | undefined;
+          const count = opts?.count ? rows.length : null;
+          return { data: rows, error: null, count };
+        }).then(onFulfilled, onRejected);
       },
     };
 
@@ -156,12 +188,16 @@ export class FakeSupabase {
   }
 }
 
-/** UUIDs fictícios (TST-*) reutilizados em todos os testes. */
+/**
+ * UUIDs fictícios (TST-*) reutilizados em todos os testes.
+ * Todos são UUIDs sintéticos, porém sintaticamente VÁLIDOS
+ * (apenas caracteres hexadecimais [0-9a-f], nas posições corretas).
+ */
 export const TST = {
-  baseA: "00000000-0000-0000-0000-00000000AAAA",
-  baseB: "00000000-0000-0000-0000-00000000BBBB",
-  userOp: "00000000-0000-0000-0000-0000000000A1",
-  userAdmin: "00000000-0000-0000-0000-0000000000AD",
-  rota1: "00000000-0000-0000-0000-0000000R0001",
-  volume1: "00000000-0000-0000-0000-0000000V0001",
+  baseA: "00000000-0000-0000-0000-0000000000aa",
+  baseB: "00000000-0000-0000-0000-0000000000bb",
+  userOp: "00000000-0000-0000-0000-0000000000a1",
+  userAdmin: "00000000-0000-0000-0000-0000000000ad",
+  rota1: "00000000-0000-0000-0000-000000000001",
+  volume1: "00000000-0000-0000-0000-000000000002",
 };

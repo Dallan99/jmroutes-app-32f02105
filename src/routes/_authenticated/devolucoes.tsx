@@ -189,6 +189,16 @@ function DevolucoesPage() {
     const ok = abrirRelatorio({ ...relatorioConfig(), autoPrint: true });
     if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
   };
+  const imprimirPorRota = () => {
+    const cfg = relatorioConfig();
+    const ok = abrirRelatorio({
+      ...cfg,
+      titulo: "Devoluções agrupadas por rota",
+      autoPrint: true,
+      agruparPor: (d) => d.rota ?? "(sem rota)",
+    });
+    if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
+  };
   const baixarCsv = () => baixarCSV(relatorioConfig());
 
   return (
@@ -251,6 +261,9 @@ function DevolucoesPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={imprimir}>
                 <Printer className="w-4 h-4 mr-2" /> Imprimir / Salvar PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={imprimirPorRota}>
+                <Printer className="w-4 h-4 mr-2" /> Imprimir agrupado por rota
               </DropdownMenuItem>
               <DropdownMenuItem onClick={baixarCsv}>
                 <Download className="w-4 h-4 mr-2" /> Baixar CSV

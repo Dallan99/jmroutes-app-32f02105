@@ -370,6 +370,55 @@ function TriagemPage() {
   const baixarCsv = () => baixarCSV(relatorioConfig());
   const printSession = baixarPDF;
 
+  const imprimirRotaSelecionada = async () => {
+    if (!rotaSelecionada) {
+      toast.warning("Selecione uma rota para imprimir seus IDs.");
+      return;
+    }
+    let detalhe = detalheQuery.data;
+    if (!detalhe || detalhe.rota !== rotaSelecionada) {
+      try {
+        detalhe = await pendentesFn({
+          data: { baseId, dataOperacional, rota: rotaSelecionada },
+        });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Erro ao carregar rota.");
+        return;
+      }
+    }
+    if (!detalhe) return;
+    type Linha = { shipment: string; cidade: string | null; status: "triado" | "pendente" };
+    const linhas: Linha[] = [
+      ...detalhe.triados.map((t) => ({ ...t, status: "triado" as const })),
+      ...detalhe.pendentes.map((p) => ({ ...p, status: "pendente" as const })),
+    ];
+    const totalRota = linhas.length;
+    const totalTriados = detalhe.triados.length;
+    const totalPendentes = detalhe.pendentes.length;
+    const pctRota = totalRota
+      ? Math.round((totalTriados / totalRota) * 100)
+      : 0;
+    const ok = abrirRelatorio<Linha>({
+      titulo: `Triagem — Rota ${rotaSelecionada}`,
+      subtitulo: `${base?.nome ?? ""} · ${dataOperacional ? new Date(dataOperacional + "T00:00:00").toLocaleDateString("pt-BR") : ""}`,
+      nomeArquivo: `triagem_rota_${rotaSelecionada}_${dataOperacional}`,
+      kpis: [
+        { label: "Total da rota", value: totalRota },
+        { label: "Triados", value: totalTriados },
+        { label: "Pendentes", value: totalPendentes },
+        { label: "Conclusão", value: `${pctRota}%` },
+      ],
+      colunas: [
+        { header: "ID (Shipment)", value: (l: Linha) => l.shipment },
+        { header: "Cidade", value: (l: Linha) => l.cidade ?? "" },
+        { header: "Status", value: (l: Linha) => (l.status === "triado" ? "Triado" : "Pendente") },
+      ],
+      linhas,
+      autoPrint: true,
+    });
+    if (!ok) toast.error("Bloqueador de pop-up impediu abrir o relatório.");
+  };
+
   const pauseSession = () => {
     setSession((s) => {
       if (s.paused) return s;
@@ -496,6 +545,13 @@ function TriagemPage() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={baixarCsv}>
                     <Download className="w-4 h-4 mr-2" /> Baixar CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={imprimirRotaSelecionada}
+                    disabled={!rotaSelecionada}
+                  >
+                    <Printer className="w-4 h-4 mr-2" />
+                    Imprimir rota{rotaSelecionada ? ` ${rotaSelecionada}` : " selecionada"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
