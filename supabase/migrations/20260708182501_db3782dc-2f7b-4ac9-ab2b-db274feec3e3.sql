@@ -1,0 +1,1 @@
+ALTER TYPE public.motivo_devolucao ADD VALUE IF NOT EXISTS 'comercio_fechado';

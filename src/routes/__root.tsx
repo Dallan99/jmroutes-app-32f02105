@@ -11,6 +11,15 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/space-grotesk/500.css";
+import "@fontsource/space-grotesk/700.css";
+import { supabase } from "@/integrations/supabase/client";
+import { Toaster } from "sonner";
+import jmLogo from "@/assets/jm-logo.jpeg.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -77,21 +86,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "JM Transportes — Recebimento de Rotas" },
+      { name: "description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
+      { name: "author", content: "JM Transportes" },
+      { name: "theme-color", content: "#0F2348" },
+      { property: "og:title", content: "JM Transportes — Recebimento de Rotas" },
+      { property: "og:description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "JM Transportes — Recebimento de Rotas" },
+      { name: "twitter:description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: jmLogo.url, type: "image/jpeg" },
+      { rel: "apple-touch-icon", href: jmLogo.url },
     ],
   }),
   shellComponent: RootShell,
@@ -116,11 +130,22 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [queryClient, router]);
 
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE public.escalas ALTER COLUMN base_id DROP NOT NULL;
