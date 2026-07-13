@@ -70,15 +70,33 @@ export class FakeSupabase {
   from(table: string) {
     const self = this;
     const filters: Record<string, unknown> = {};
+    const preds: Array<(r: FakeRow) => boolean> = [];
+    const orders: Array<{ col: string; ascending: boolean }> = [];
+    let rangeSel: { from: number; to: number } | null = null;
     const state = { op: "select" as CallLogEntry["op"], payload: undefined as unknown };
 
-    const applyFilters = (rows: FakeRow[]) =>
-      rows.filter((r) => Object.entries(filters).every(([k, v]) => r[k] === v));
+    const compareVals = (a: unknown, b: unknown): number => {
+      if (typeof a === "number" && typeof b === "number") return a - b;
+      const sa = String(a ?? "");
+      const sb = String(b ?? "");
+      return sa < sb ? -1 : sa > sb ? 1 : 0;
+    };
 
-    /**
-     * Consome nextError sem aplicar side-effect. Retorna a resposta de erro
-     * quando o próximo erro está armado para a op atual, caso contrário null.
-     */
+    const applyAll = (rows: FakeRow[]) => {
+      let out = rows.filter((r) => preds.every((p) => p(r)));
+      if (orders.length > 0) {
+        out = [...out].sort((a, b) => {
+          for (const o of orders) {
+            const c = compareVals(a[o.col], b[o.col]);
+            if (c !== 0) return o.ascending ? c : -c;
+          }
+          return 0;
+        });
+      }
+      if (rangeSel) out = out.slice(rangeSel.from, rangeSel.to + 1);
+      return out;
+    };
+
     const consumeErrorIfArmed = () => {
       const cfg = self.tbl(table);
       if (cfg.nextError && cfg.nextError.op === state.op) {
@@ -120,15 +138,30 @@ export class FakeSupabase {
       },
       eq(col: string, val: unknown) {
         filters[col] = val;
+        preds.push((r) => r[col] === val);
         return builder;
       },
-      in(_col: string, _vals: unknown[]) {
+      gte(col: string, val: unknown) {
+        preds.push((r) => compareVals(r[col], val) >= 0);
         return builder;
       },
-      order() {
+      lte(col: string, val: unknown) {
+        preds.push((r) => compareVals(r[col], val) <= 0);
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        preds.push((r) => vals.includes(r[col]));
+        return builder;
+      },
+      order(col: string, opts?: { ascending?: boolean }) {
+        orders.push({ col, ascending: opts?.ascending !== false });
         return builder;
       },
       limit() {
+        return builder;
+      },
+      range(from: number, to: number) {
+        rangeSel = { from, to };
         return builder;
       },
       maybeSingle() {
@@ -141,7 +174,7 @@ export class FakeSupabase {
             cfg.rows.push(...arr);
             return { data: arr[0] ?? null, error: null };
           }
-          const rows = applyFilters(cfg.rows);
+          const rows = applyAll(cfg.rows);
           const row = rows[0] ?? null;
           if (state.op === "update" && row) {
             Object.assign(row, state.payload as FakeRow);
@@ -166,7 +199,7 @@ export class FakeSupabase {
             cfg.rows.push(...arr);
             return { data: state.payload, error: null };
           }
-          const rows = applyFilters(cfg.rows);
+          const rows = applyAll(cfg.rows);
           if (state.op === "update") {
             rows.forEach((r) => Object.assign(r, state.payload as FakeRow));
             return { data: rows, error: null };
