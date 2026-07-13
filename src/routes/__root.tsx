@@ -133,6 +133,17 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    // ========================================================================
+    // ⚠️  REMOVER ANTES DO MERGE PARA PRODUÇÃO
+    // ------------------------------------------------------------------------
+    // O bloco try/catch abaixo existe SOMENTE para permitir a homologação
+    // visual em /preview-relatorios no JMRoutes Dev Playground sem
+    // credenciais Supabase. NÃO é uma correção definitiva de produção: em
+    // produção o cliente Supabase DEVE estar configurado e o listener de
+    // auth NÃO deve ser silenciado — este catch pode mascarar erro real de
+    // configuração ou falha de autenticação. Antes do merge, restaurar o
+    // corpo original (sem try/catch) e remover este comentário.
+    // ========================================================================
     try {
       const { data: sub } = supabase.auth.onAuthStateChange((event) => {
         if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
@@ -141,11 +152,12 @@ function RootComponent() {
       });
       return () => sub.subscription.unsubscribe();
     } catch (err) {
-      // Supabase não configurado (playground sem .env). Ignora com segurança.
+      // TEMPORÁRIO — ver bloco de aviso acima.
       console.warn("[root] Supabase auth listener indisponível:", (err as Error).message);
       return;
     }
   }, [queryClient, router]);
+
 
 
   return (
