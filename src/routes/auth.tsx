@@ -35,8 +35,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import heroImg from "@/assets/jm-hero-clean.jpg.asset.json";
-import logoImg from "@/assets/jm-logotipo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -113,7 +111,7 @@ function AuthPage() {
         <div className="relative overflow-hidden">
           {/* imagem de fundo */}
           <img
-            src={heroImg.url}
+            src="/jm-hero.jpg"
             alt="Frota JM Transportes"
             className="absolute inset-0 w-full h-full object-cover object-center opacity-90"
           />
@@ -135,7 +133,7 @@ function AuthPage() {
             <div>
               <div className="flex items-center gap-4">
                 <img
-                  src={logoImg.url}
+                  src="/jm-logo.jpeg"
                   alt="JM"
                   className="w-16 h-16 md:w-20 md:h-20 rounded-lg shadow-lg"
                 />

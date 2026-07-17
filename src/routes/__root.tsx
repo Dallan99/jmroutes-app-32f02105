@@ -19,7 +19,6 @@ import "@fontsource/space-grotesk/500.css";
 import "@fontsource/space-grotesk/700.css";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "sonner";
-import jmLogo from "@/assets/jm-logo.jpeg.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -96,16 +95,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "JM Transportes — Recebimento de Rotas" },
       { name: "twitter:description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
+      { property: "og:image", content: "/jm-hero.jpg" },
+      { name: "twitter:image", content: "/jm-hero.jpg" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: jmLogo.url, type: "image/jpeg" },
-      { rel: "apple-touch-icon", href: jmLogo.url },
+      { rel: "icon", href: "/jm-logo.jpeg", type: "image/jpeg" },
+      { rel: "apple-touch-icon", href: "/jm-logo.jpeg" },
     ],
   }),
   shellComponent: RootShell,

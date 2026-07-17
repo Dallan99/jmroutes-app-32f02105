@@ -21,7 +21,7 @@ function InicioPage() {
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
       <section className="relative overflow-hidden rounded-2xl border bg-card">
         <img
-          src="/jm-hero.png"
+          src="/jm-hero.jpg"
           alt="Frota JM Transportes"
           className="w-full h-56 md:h-72 object-cover"
         />
