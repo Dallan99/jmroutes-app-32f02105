@@ -11,7 +11,10 @@ describe("montarLinhasTriagemRota — 239 faltantes + 10 triados = 249 linhas, s
   // rota diferente — não deve vazar
   const outraRota = {
     pendentes: Array.from({ length: 20 }, (_, i) => ({ shipment: `B-${i}`, cidade: "Manacapuru" })),
-    triados: Array.from({ length: 5 }, (_, i) => ({ shipment: `B-tri-${i}`, cidade: "Manacapuru" })),
+    triados: Array.from({ length: 5 }, (_, i) => ({
+      shipment: `B-tri-${i}`,
+      cidade: "Manacapuru",
+    })),
   };
 
   it("gera 249 linhas exatas com status correto", () => {
@@ -76,9 +79,7 @@ describe("montarHtmlRelatorio — CSS de quebra de página e cabeçalho de grupo
     expect(html).toMatch(
       /<thead><tr class="grupo-head"><th colspan="2">V1_AM1 — 2 registros<\/th>/,
     );
-    expect(html).toMatch(
-      /<thead><tr class="grupo-head"><th colspan="2">K1_AM1 — 1 registro<\/th>/,
-    );
+    expect(html).toMatch(/<thead><tr class="grupo-head"><th colspan="2">K1_AM1 — 1 registro<\/th>/);
   });
 
   it("não aplica max-height nem overflow (auto|hidden) ao corpo do relatório", () => {
