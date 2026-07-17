@@ -209,8 +209,7 @@ export class FakeSupabase {
             return { data: null, error: null };
           }
           const opts = (builder as any)._selectOpts as
-            | { count?: string; head?: boolean }
-            | undefined;
+            { count?: string; head?: boolean } | undefined;
           const count = opts?.count ? rows.length : null;
           return { data: rows, error: null, count };
         }).then(onFulfilled, onRejected);
