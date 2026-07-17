@@ -1,3 +1,5 @@
+import { JM_LOGO_DATA_URL } from "@/assets/brand-images";
+
 export function JmLogo({
   size = 36,
   className,
@@ -7,7 +9,7 @@ export function JmLogo({
 }) {
   return (
     <img
-      src="/jm-logo.jpeg"
+      src={JM_LOGO_DATA_URL}
       alt="JM Transportes"
       width={size}
       height={size}
