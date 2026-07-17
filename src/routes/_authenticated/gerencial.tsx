@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { gerencialData, rotasPorBase, type OperadorProd, type RotaBaseRow } from "@/lib/gerencial.functions";
+import { gerencialData, rotasPorBase, transferenciasGerencial, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
   Line, LineChart, Legend,
 } from "recharts";
-import { Activity, AlertTriangle, Award, CheckCircle2, Clock, MapPin, PackageCheck, TrendingDown, TrendingUp, Tv, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, Award, CheckCircle2, Clock, MapPin, PackageCheck, TrendingDown, TrendingUp, Truck, Tv, Users, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/gerencial")({
   head: () => ({ meta: [{ title: "Dashboard Gerencial — JM Transportes" }] }),
@@ -24,12 +24,18 @@ type Periodo = "hoje" | "7d" | "30d";
 function GerencialPage() {
   const [periodo, setPeriodo] = useState<Periodo>("7d");
   const fn = useServerFn(gerencialData);
+  const transferenciasFn = useServerFn(transferenciasGerencial);
   const q = useQuery({
     queryKey: ["gerencial", periodo],
     queryFn: () => fn({ data: { periodo } }),
     refetchInterval: 30_000,
   });
   const d = q.data;
+  const transferenciasQuery = useQuery({
+    queryKey: ["gerencial-transferencias", periodo],
+    queryFn: () => transferenciasFn({ data: { periodo } }),
+    refetchInterval: 30_000,
+  });
 
   const fmtTempo = (ms: number | null) => (ms ? `${(ms / 1000).toFixed(1)}s` : "—");
   const fmtPct = (v: number) => `${v.toFixed(1)}%`;
@@ -182,11 +188,17 @@ function GerencialPage() {
         </Card>
       )}
 
+      <TransferenciasSection
+        data={transferenciasQuery.data}
+        loading={transferenciasQuery.isLoading}
+        error={transferenciasQuery.error}
+        onRetry={() => transferenciasQuery.refetch()}
+      />
+
       <RotasPorBaseSection />
     </div>
   );
 }
-
 function todayYMD() {
   const d = new Date();
   const off = d.getTimezoneOffset();
@@ -207,9 +219,9 @@ function RotasPorBaseSection() {
 
   // Sincroniza o input de data com o dia efetivo retornado pelo backend
   // (quando o usuário ainda não escolheu manualmente).
-  if (d?.data && !diaTocado && d.data !== dia) {
-    setDia(d.data);
-  }
+  useEffect(() => {
+    if (d?.data && !diaTocado && d.data !== dia) setDia(d.data);
+  }, [d?.data, dia, diaTocado]);
 
   const rotasFiltradas: RotaBaseRow[] = d?.rotas ?? [];
 
@@ -356,6 +368,197 @@ function RotasPorBaseSection() {
         )}
       </Card>
     </div>
+  );
+}
+
+function TransferenciasSection({
+  data,
+  loading,
+  error,
+  onRetry,
+}: {
+  data?: TransferenciasGerencialData;
+  loading: boolean;
+  error: Error | null;
+  onRetry: () => void;
+}) {
+  const minutos = (valor: number | null) => (valor === null ? "—" : `${valor} min`);
+  const responsabilidade = (valor: string) =>
+    ({
+      JM_FROTA: "JM / Frota",
+      MELI: "Mercado Livre",
+      EXTERNO: "Fator externo",
+      EM_ANALISE: "Em análise",
+    })[valor] ?? valor;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="font-display text-xl md:text-2xl font-bold flex items-center gap-2">
+          <Truck className="w-5 h-5 text-primary" /> Transferências Service → XPT
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Evidências de disponibilização da frota JM e do tempo aguardando carregamento/liberação no Service.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Kpi label="Veículos" value={data?.totais.total ?? "—"} icon={Truck} />
+        <Kpi
+          label="Disponíveis até 07h"
+          value={data?.totais.disponibilizados_ate_7 ?? "—"}
+          icon={CheckCircle2}
+          accent="success"
+        />
+        <Kpi
+          label="Aguardando carga"
+          value={data?.totais.aguardando_carga ?? "—"}
+          icon={Clock}
+          accent="warning"
+        />
+        <Kpi
+          label="Saídas após 09h (MELI)"
+          value={data?.totais.saidas_apos_9 ?? "—"}
+          icon={AlertTriangle}
+          accent="destructive"
+        />
+        <Kpi
+          label="Média aguardando carga"
+          value={minutos(data?.totais.media_service_min ?? null)}
+          icon={Clock}
+          accent="warning"
+        />
+        <Kpi
+          label="Maior espera por carga"
+          value={minutos(data?.totais.maior_service_min ?? null)}
+          icon={AlertTriangle}
+          accent="destructive"
+        />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card className="p-4 lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold">Desempenho por base</h3>
+            <div className="text-xs text-muted-foreground">
+              Deslocamento (complementar): <b>{minutos(data?.totais.media_deslocamento_min ?? null)}</b>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+                  <th className="py-2 pr-3">Base</th>
+                  <th className="py-2 pr-3 text-right">Veículos</th>
+                  <th className="py-2 pr-3 text-right">Até 07h</th>
+                  <th className="py-2 pr-3 text-right">Aguardando carga</th>
+                  <th className="py-2 pr-3 text-right">Saídas após 09h</th>
+                  <th className="py-2 pr-3 text-right">Média espera</th>
+                  <th className="py-2 text-right">Média trajeto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.porBase ?? []).map((base) => (
+                  <tr key={base.base_id} className="border-b border-border/50 hover:bg-muted/30">
+                    <td className="py-2 pr-3">
+                      <b>{base.base_nome}</b>
+                      <div className="text-[10px] text-muted-foreground font-mono">
+                        {base.base_codigo}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono">{base.total}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-success">{base.disponibilizados_ate_7}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-warning">{base.aguardando_carga}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-destructive">
+                      {base.saidas_apos_9}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono">{minutos(base.media_service_min)}</td>
+                    <td className="py-2 text-right font-mono">
+                      {minutos(base.media_deslocamento_min)}
+                    </td>
+                  </tr>
+                ))}
+                {!loading && (data?.porBase.length ?? 0) === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                      Sem transferências no período.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold mb-3">Maiores esperas por carregamento</h3>
+          <ol className="space-y-2">
+            {(data?.rankingMotoristas ?? []).slice(0, 5).map((item, index) => (
+              <li
+                key={item.motorista}
+                className="flex items-center justify-between gap-3 rounded bg-muted/30 p-2"
+              >
+                <div className="min-w-0">
+                  <b className="truncate block">
+                    {index + 1}. {item.motorista}
+                  </b>
+                  <span className="text-xs text-muted-foreground">
+                    {item.viagens_atrasadas} espera(s) registrada(s)
+                  </span>
+                </div>
+                <span className="font-mono text-sm text-destructive">
+                  {item.minutos_atraso} min
+                </span>
+              </li>
+            ))}
+            {!loading && (data?.rankingMotoristas.length ?? 0) === 0 && (
+              <li className="text-sm text-muted-foreground">Nenhum tempo de espera completo registrado.</li>
+            )}
+          </ol>
+        </Card>
+      </div>
+
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold mb-3">Principais motivos e responsabilidades</h3>
+        <div className="grid md:grid-cols-2 gap-2">
+          {(data?.motivos ?? []).map((item) => (
+            <div
+              key={`${item.responsabilidade}-${item.motivo}`}
+              className="flex items-center justify-between gap-3 rounded border border-border p-3"
+            >
+              <div>
+                <b className="text-sm">{item.motivo}</b>
+                <div className="text-xs text-muted-foreground">
+                  {responsabilidade(item.responsabilidade)} · {item.ocorrencias} ocorrência(s)
+                </div>
+              </div>
+              <span className="font-mono text-sm text-destructive">{item.minutos_atraso} min</span>
+            </div>
+          ))}
+          {!loading && (data?.motivos.length ?? 0) === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma ocorrência de atraso registrada.
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {loading && (
+        <p className="text-center text-sm text-muted-foreground">
+          Carregando indicadores de transferências…
+        </p>
+      )}
+      {error && (
+        <Card className="p-4 border-destructive">
+          <p className="text-sm text-destructive">
+            Erro ao carregar transferências: {error.message}
+          </p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>
+            Tentar novamente
+          </Button>
+        </Card>
+      )}
+    </section>
   );
 }
 
