@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Boxes, ScanBarcode, PackageSearch, ClipboardList, TrendingUp, RotateCcw } from "lucide-react";
-import jmHero from "@/assets/jm-hero-clean.jpg.asset.json";
 import { JmLogo } from "@/components/jm-logo";
 
 export const Route = createFileRoute("/_authenticated/inicio")({
@@ -22,7 +21,7 @@ function InicioPage() {
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
       <section className="relative overflow-hidden rounded-2xl border bg-card">
         <img
-          src={jmHero.url}
+          src="/jm-hero.png"
           alt="Frota JM Transportes"
           className="w-full h-56 md:h-72 object-cover"
         />
