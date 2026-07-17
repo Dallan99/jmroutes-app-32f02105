@@ -33,6 +33,42 @@ export type GerencialData = {
   comparativo: { operador: string; hoje: number; semana: number; mes: number }[];
 };
 
+export type TransferenciasGerencialData = {
+  periodo: "hoje" | "7d" | "30d";
+  totais: {
+    total: number;
+    disponibilizados_ate_7: number;
+    aguardando_carga: number;
+    saidas_apos_9: number;
+    taxa_disponibilizacao: number;
+    media_service_min: number | null;
+    maior_service_min: number | null;
+    media_deslocamento_min: number | null;
+  };
+  porBase: {
+    base_id: string;
+    base_codigo: string;
+    base_nome: string;
+    total: number;
+    disponibilizados_ate_7: number;
+    aguardando_carga: number;
+    saidas_apos_9: number;
+    media_service_min: number | null;
+    media_deslocamento_min: number | null;
+  }[];
+  rankingMotoristas: {
+    motorista: string;
+    viagens_atrasadas: number;
+    minutos_atraso: number;
+  }[];
+  motivos: {
+    motivo: string;
+    responsabilidade: string;
+    ocorrencias: number;
+    minutos_atraso: number;
+  }[];
+};
+
 export type RotaBaseRow = {
   base_id: string;
   base_codigo: string;
@@ -190,6 +226,219 @@ export const gerencialData = createServerFn({ method: "POST" })
       comparativo,
     };
   });
+export const transferenciasGerencial = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => inputSchema.parse(input))
+  .handler(async ({ data, context }): Promise<TransferenciasGerencialData> => {
+    const { supabase } = context;
+    const desde = inicioPeriodo(data.periodo).toISOString().slice(0, 10);
+
+    const { data: transferencias, error } = await supabase
+      .from("transferencias")
+      .select("id, base_id, motorista, status")
+      .gte("data_operacional", desde)
+      .order("data_operacional", { ascending: false })
+      .limit(20000);
+    if (error) throw new Error(error.message);
+
+    type TransferenciaRow = {
+      id: string;
+      base_id: string;
+      motorista: string;
+      status: string;
+    };
+    type EventoRow = {
+      transferencia_id: string;
+      etapa: "chegada_service" | "saida_service" | "chegada_xpt" | "saida_xpt";
+      ocorrido_em: string;
+    };
+    type OcorrenciaRow = {
+      transferencia_id: string;
+      motivo_id: string | null;
+      responsabilidade: string;
+      minutos_atraso: number;
+    };
+
+    const rows = ((transferencias ?? []) as TransferenciaRow[]).filter(
+      (t) => t.status !== "cancelada",
+    );
+    if (!rows.length) {
+      return {
+        periodo: data.periodo,
+        totais: {
+          total: 0,
+          disponibilizados_ate_7: 0,
+          aguardando_carga: 0,
+          saidas_apos_9: 0,
+          taxa_disponibilizacao: 0,
+          media_service_min: null,
+          maior_service_min: null,
+          media_deslocamento_min: null,
+        },
+        porBase: [],
+        rankingMotoristas: [],
+        motivos: [],
+      };
+    }
+
+    const ids = rows.map((t) => t.id);
+    const eventos: EventoRow[] = [];
+    const ocorrencias: OcorrenciaRow[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const lote = ids.slice(i, i + 200);
+      const [eventosRes, ocorrenciasRes] = await Promise.all([
+        supabase
+          .from("transferencia_eventos")
+          .select("transferencia_id, etapa, ocorrido_em")
+          .in("transferencia_id", lote),
+        supabase
+          .from("transferencia_ocorrencias")
+          .select("transferencia_id, motivo_id, responsabilidade, minutos_atraso")
+          .in("transferencia_id", lote)
+          .gt("minutos_atraso", 0),
+      ]);
+      if (eventosRes.error) throw new Error(eventosRes.error.message);
+      if (ocorrenciasRes.error) throw new Error(ocorrenciasRes.error.message);
+      eventos.push(...((eventosRes.data ?? []) as EventoRow[]));
+      ocorrencias.push(...((ocorrenciasRes.data ?? []) as OcorrenciaRow[]));
+    }
+
+    const baseIds = Array.from(new Set(rows.map((t) => t.base_id)));
+    const motivoIds = Array.from(
+      new Set(ocorrencias.map((o) => o.motivo_id).filter(Boolean)),
+    ) as string[];
+    const [basesRes, motivosRes] = await Promise.all([
+      supabase.from("bases").select("id, codigo, nome").in("id", baseIds),
+      motivoIds.length
+        ? supabase.from("transferencia_motivos").select("id, nome").in("id", motivoIds)
+        : Promise.resolve({ data: [] as { id: string; nome: string }[], error: null }),
+    ]);
+    if (basesRes.error) throw new Error(basesRes.error.message);
+    if (motivosRes.error) throw new Error(motivosRes.error.message);
+
+    const baseMap = new Map((basesRes.data ?? []).map((b) => [b.id, b] as const));
+    const motivoMap = new Map((motivosRes.data ?? []).map((m) => [m.id, m.nome] as const));
+    const eventosMap = new Map<string, EventoRow[]>();
+    for (const evento of eventos) {
+      const lista = eventosMap.get(evento.transferencia_id) ?? [];
+      lista.push(evento);
+      eventosMap.set(evento.transferencia_id, lista);
+    }
+
+    const minutosEntre = (inicio?: string, fim?: string) =>
+      inicio && fim
+        ? Math.max(0, Math.round((Date.parse(fim) - Date.parse(inicio)) / 60000))
+        : null;
+    const minutosDoDiaEmSaoPaulo = (iso?: string) => {
+      if (!iso) return null;
+      const partes = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(new Date(iso));
+      const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
+      const minuto = Number(partes.find((parte) => parte.type === "minute")?.value);
+      return Number.isFinite(hora) && Number.isFinite(minuto) ? hora * 60 + minuto : null;
+    };
+    const metricas = rows.map((t) => {
+      const lista = eventosMap.get(t.id) ?? [];
+      const chegadaService = lista.find((e) => e.etapa === "chegada_service")?.ocorrido_em;
+      const saidaService = lista.find((e) => e.etapa === "saida_service")?.ocorrido_em;
+      const chegadaXpt = lista.find((e) => e.etapa === "chegada_xpt")?.ocorrido_em;
+      const saidaXpt = lista.find((e) => e.etapa === "saida_xpt")?.ocorrido_em;
+      return {
+        ...t,
+        chegadaService,
+        saidaService,
+        disponibilizadaAte7: (minutosDoDiaEmSaoPaulo(chegadaService) ?? Infinity) <= 7 * 60,
+        aguardandoCarga: !!chegadaService && !saidaService,
+        saidaApos9: (minutosDoDiaEmSaoPaulo(saidaService) ?? -Infinity) > 9 * 60,
+        permanencia: minutosEntre(chegadaService, saidaService),
+        deslocamento: minutosEntre(saidaService, chegadaXpt),
+        concluida: !!saidaXpt,
+      };
+    });
+
+    const media = (valores: Array<number | null>) => {
+      const validos = valores.filter((v): v is number => v !== null);
+      return validos.length
+        ? Math.round(validos.reduce((total, valor) => total + valor, 0) / validos.length)
+        : null;
+    };
+    const contarService = (lista: typeof metricas) => ({
+      disponibilizados_ate_7: lista.filter((t) => t.disponibilizadaAte7).length,
+      aguardando_carga: lista.filter((t) => t.aguardandoCarga).length,
+      saidas_apos_9: lista.filter((t) => t.saidaApos9).length,
+    });
+
+    const service = contarService(metricas);
+    const permanencias = metricas.map((t) => t.permanencia).filter((valor): valor is number => valor !== null);
+    const totais: TransferenciasGerencialData["totais"] = {
+      total: metricas.length,
+      ...service,
+      taxa_disponibilizacao: metricas.length ? (service.disponibilizados_ate_7 / metricas.length) * 100 : 0,
+      media_service_min: media(permanencias),
+      maior_service_min: permanencias.length ? Math.max(...permanencias) : null,
+      media_deslocamento_min: media(metricas.map((t) => t.deslocamento)),
+    };
+
+    const porBase = baseIds
+      .map((baseId) => {
+        const lista = metricas.filter((t) => t.base_id === baseId);
+        const base = baseMap.get(baseId);
+        return {
+          base_id: baseId,
+          base_codigo: base?.codigo ?? "—",
+          base_nome: base?.nome ?? "Base não encontrada",
+          total: lista.length,
+          ...contarService(lista),
+          media_service_min: media(lista.map((t) => t.permanencia)),
+          media_deslocamento_min: media(lista.map((t) => t.deslocamento)),
+        };
+      })
+      .sort((a, b) => b.saidas_apos_9 - a.saidas_apos_9 || b.total - a.total);
+
+    const motoristasMap = new Map<string, { viagens_atrasadas: number; minutos_atraso: number }>();
+    for (const t of metricas) {
+      if (t.permanencia === null) continue;
+      const atual = motoristasMap.get(t.motorista) ?? { viagens_atrasadas: 0, minutos_atraso: 0 };
+      atual.viagens_atrasadas++;
+      atual.minutos_atraso += t.permanencia;
+      motoristasMap.set(t.motorista, atual);
+    }
+    const rankingMotoristas = Array.from(motoristasMap.entries())
+      .map(([motorista, valores]) => ({ motorista, ...valores }))
+      .sort(
+        (a, b) => b.minutos_atraso - a.minutos_atraso || b.viagens_atrasadas - a.viagens_atrasadas,
+      )
+      .slice(0, 10);
+
+    const motivosMap = new Map<
+      string,
+      { motivo: string; responsabilidade: string; ocorrencias: number; minutos_atraso: number }
+    >();
+    for (const ocorrencia of ocorrencias) {
+      const motivo = ocorrencia.motivo_id
+        ? (motivoMap.get(ocorrencia.motivo_id) ?? "Motivo não encontrado")
+        : "Em análise";
+      const chave = `${ocorrencia.responsabilidade}::${motivo}`;
+      const atual = motivosMap.get(chave) ?? {
+        motivo,
+        responsabilidade: ocorrencia.responsabilidade,
+        ocorrencias: 0,
+        minutos_atraso: 0,
+      };
+      atual.ocorrencias++;
+      atual.minutos_atraso += ocorrencia.minutos_atraso;
+      motivosMap.set(chave, atual);
+    }
+    const motivos = Array.from(motivosMap.values())
+      .sort((a, b) => b.minutos_atraso - a.minutos_atraso || b.ocorrencias - a.ocorrencias)
+      .slice(0, 10);
+
+    return { periodo: data.periodo, totais, porBase, rankingMotoristas, motivos };
+  });
 
 const rotasInputSchema = z.object({
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -224,13 +473,14 @@ export const rotasPorBase = createServerFn({ method: "POST" })
     }
 
     // Importações ativas no dia para essas bases
-    let { data: imports, error: ei } = await supabase
+    const importacoesIniciais = await supabase
       .from("importacoes_escala")
       .select("id, base_id")
       .eq("data_operacional", dia)
       .eq("ativa", true)
       .in("base_id", allowedBases.map((b) => b.id));
-    if (ei) throw new Error(ei.message);
+    let imports = importacoesIniciais.data;
+    if (importacoesIniciais.error) throw new Error(importacoesIniciais.error.message);
 
     // Sem importação para o dia solicitado — usa o dia mais recente com dados.
     if (!data.data && (imports ?? []).length === 0) {
