@@ -59,18 +59,12 @@ describe("FakeSupabase — garantias de nextError sem side-effect", () => {
     s.setTable("volumes", [{ id: TST.volume1, recebido: false }], {
       nextError: { op: "update", error: { message: "denied" } },
     });
-    const resp = await s
-      .from("volumes")
-      .update({ recebido: true })
-      .eq("id", TST.volume1);
+    const resp = await s.from("volumes").update({ recebido: true }).eq("id", TST.volume1);
     expect((resp as { error: unknown }).error).toEqual({ message: "denied" });
     expect(s.tables["volumes"].rows[0]).toEqual({ id: TST.volume1, recebido: false });
 
     // sem erro armado, o update passa a valer
-    const ok = await s
-      .from("volumes")
-      .update({ recebido: true })
-      .eq("id", TST.volume1);
+    const ok = await s.from("volumes").update({ recebido: true }).eq("id", TST.volume1);
     expect((ok as { error: unknown }).error).toBeNull();
     expect(s.tables["volumes"].rows[0]).toEqual({ id: TST.volume1, recebido: true });
   });
