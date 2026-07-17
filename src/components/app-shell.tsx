@@ -28,6 +28,8 @@ import {
   LogOut,
   Boxes,
   RotateCcw,
+  Truck,
+  ListChecks,
 } from "lucide-react";
 import { JmLogo, JmWordmark } from "@/components/jm-logo";
 import { Button } from "@/components/ui/button";
@@ -41,7 +43,7 @@ import { BaseOperacionalProvider, useBaseOperacional } from "@/lib/base-operacio
 import { SeletorBaseDia } from "@/components/base-operacional-selector";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
-const INACTIVITY_MS = 4 * 60 * 60 * 1000; // 4 horas
+const INACTIVITY_MS = 4 * 60 * 60 * 1000;
 
 function useInactivityLogout() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,9 +76,7 @@ type NavItem = {
   title: string;
   to: string;
   icon: typeof LayoutDashboard;
-  /** Quando true, o item aparece desabilitado com selo "em breve". */
   soon?: boolean;
-  /** Se definido, só renderiza para esses perfis. */
   roles?: Array<Role>;
 };
 
@@ -89,7 +89,9 @@ const NAV_OPERACIONAL: NavItem[] = [
   { title: "Triagem", to: "/triagem", icon: PackageSearch },
   { title: "Contagem", to: "/contagem", icon: ClipboardList },
   { title: "Devoluções", to: "/devolucoes", icon: RotateCcw },
-  { title: "Inventário", to: "/inventario", icon: ClipboardList },
+  { title: "Transferências", to: "/transferencias", icon: Truck },
+  { title: "Transferências em lote", to: "/transferencias-lote", icon: ListChecks },
+  { title: "Inventário", to: "/inventario-central", icon: ClipboardList },
 ];
 const NAV_GESTAO: NavItem[] = [
   { title: "Histórico", to: "/historico", icon: History, roles: ["admin", "supervisor", "gerente"] },
@@ -159,9 +161,7 @@ function AppSidebar({ roles }: { roles: Array<Role> }) {
                         {!collapsed && (
                           <>
                             <span className="truncate">{item.title}</span>
-                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-sidebar-accent/60 text-sidebar-foreground/60 uppercase">
-                              em breve
-                            </span>
+                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-sidebar-accent/60 text-sidebar-foreground/60 uppercase">em breve</span>
                           </>
                         )}
                       </div>
@@ -194,11 +194,7 @@ function AppSidebar({ roles }: { roles: Array<Role> }) {
         {renderGroup("Administração", NAV_ADMIN)}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
-        {!collapsed && (
-          <div className="text-[10px] text-sidebar-foreground/50 px-2 py-1">
-            v1.0 · Iteração 1
-          </div>
-        )}
+        {!collapsed && <div className="text-[10px] text-sidebar-foreground/50 px-2 py-1">v1.0 · Iteração 1</div>}
       </SidebarFooter>
     </Sidebar>
   );
@@ -235,9 +231,7 @@ function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
   return (
     <header className="h-14 border-b bg-card flex items-center px-3 gap-3 sticky top-0 z-30">
       <SidebarTrigger />
-      <div className="hidden md:flex items-center text-xs text-muted-foreground font-mono">
-        {formatDateTimeBR(now)}
-      </div>
+      <div className="hidden md:flex items-center text-xs text-muted-foreground font-mono">{formatDateTimeBR(now)}</div>
       <div className="ml-auto flex items-center gap-3">
         <div className="text-right leading-tight">
           <div className="text-sm font-medium">{nome ?? "—"}</div>
@@ -246,16 +240,12 @@ function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
             {base && diaOperacional && (
               <>
                 {" · "}
-                <span className="font-mono normal-case">
-                  {base.codigo} · {new Date(diaOperacional + "T00:00:00").toLocaleDateString("pt-BR")}
-                </span>
+                <span className="font-mono normal-case">{base.codigo} · {new Date(diaOperacional + "T00:00:00").toLocaleDateString("pt-BR")}</span>
               </>
             )}
           </div>
         </div>
-        <div className="w-8 h-8 rounded-full brand-gradient text-white flex items-center justify-center text-xs font-bold uppercase">
-          {(nome ?? "?").slice(0, 2)}
-        </div>
+        <div className="w-8 h-8 rounded-full brand-gradient text-white flex items-center justify-center text-xs font-bold uppercase">{(nome ?? "?").slice(0, 2)}</div>
         <Button variant="ghost" size="icon" onClick={logout} title="Sair">
           <LogOut className="w-4 h-4" />
         </Button>
