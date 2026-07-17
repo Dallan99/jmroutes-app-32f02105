@@ -6,11 +6,11 @@ hardening dos pipelines).
 
 ## Classificação
 
-| Categoria | Local | O que prova | O que NÃO prova |
-|---|---|---|---|
-| **Unitário do fake** | `tests/fakes/fake.smoke.test.ts` | O `FakeSupabase` respeita seu próprio contrato: `eq`, `count:exact`, semântica de `nextError` (consumido uma vez, sem side-effect). | Nada sobre o Supabase real. |
-| **Caracterização estática (leitura de código)** | `tests/characterization/*.source.test.ts` | Que o código-fonte atual contém (ou não contém) construções específicas: `for update`, `.rpc(`, `check-then-act`, uso do helper de base autorizada, etc. | Comportamento em execução. |
-| **Caracterização de risco (fake em memória)** | `tests/characterization/concorrencia.test.ts`, `rls-outra-base.test.ts` | Que a estrutura atual do handler PERMITE o risco (dois `bipar` paralelos passam pelo check-then-act; linha invisível vira `inexistente`). | Ordem exata de commit no PostgreSQL, comportamento real de RLS/policies/`SECURITY DEFINER`, locks, transações. |
+| Categoria                                       | Local                                                                   | O que prova                                                                                                                                              | O que NÃO prova                                                                                                |
+| ----------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Unitário do fake**                            | `tests/fakes/fake.smoke.test.ts`                                        | O `FakeSupabase` respeita seu próprio contrato: `eq`, `count:exact`, semântica de `nextError` (consumido uma vez, sem side-effect).                      | Nada sobre o Supabase real.                                                                                    |
+| **Caracterização estática (leitura de código)** | `tests/characterization/*.source.test.ts`                               | Que o código-fonte atual contém (ou não contém) construções específicas: `for update`, `.rpc(`, `check-then-act`, uso do helper de base autorizada, etc. | Comportamento em execução.                                                                                     |
+| **Caracterização de risco (fake em memória)**   | `tests/characterization/concorrencia.test.ts`, `rls-outra-base.test.ts` | Que a estrutura atual do handler PERMITE o risco (dois `bipar` paralelos passam pelo check-then-act; linha invisível vira `inexistente`).                | Ordem exata de commit no PostgreSQL, comportamento real de RLS/policies/`SECURITY DEFINER`, locks, transações. |
 
 ## Limitações do fake (`tests/fakes/fake-supabase-client.ts`)
 

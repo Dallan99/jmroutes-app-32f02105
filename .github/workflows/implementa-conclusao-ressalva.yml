@@ -1,0 +1,304 @@
+name: Implementa conclusão de rota com ressalva
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/implementa-conclusao-ressalva.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Aplicar alterações
+        shell: python {0}
+        run: |
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f"Trecho não encontrado: {label}")
+              return text.replace(old, new, 1)
+
+          backend = Path("src/lib/triagem.functions.ts")
+          text = backend.read_text(encoding="utf-8")
+
+          marker = '''export type LocalizacaoShipmentTriagem =
+            | {
+                encontrado: true;
+                shipment: string;
+                rota: string;
+                planejada: string | null;
+                otimizada: string | null;
+                cidade: string | null;
+                triado: boolean;
+              }
+            | { encontrado: false; shipment: string; mensagem: string };
+          '''
+          addition = marker + '''
+          const concluirRotaRessalvaSchema = z.object({
+            baseId: z.string().uuid(),
+            dataOperacional: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+            rota: z.string().trim().min(1).max(120),
+            motivo: z.string().trim().min(5, "Informe um motivo com pelo menos 5 caracteres.").max(1000),
+          });
+
+          export type ConclusaoRotaRessalva = {
+            rota: string;
+            motivo: string;
+            previstos: number;
+            triados: number;
+            faltantes: number;
+            concluidaEm: string;
+            concluidaPor: string;
+          };
+
+          export const concluirRotaComRessalva = createServerFn({ method: "POST" })
+            .middleware([requireSupabaseAuth])
+            .inputValidator((d: unknown) => concluirRotaRessalvaSchema.parse(d))
+            .handler(async ({ data, context }): Promise<ConclusaoRotaRessalva> => {
+              const { supabase, userId } = context;
+              const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+              const { auditRequestMeta } = await import("./audit.server");
+
+              const { data: impAtiva, error: impErro } = await supabase
+                .from("importacoes_escala")
+                .select("id")
+                .eq("base_id", data.baseId)
+                .eq("data_operacional", data.dataOperacional)
+                .eq("ativa", true)
+                .maybeSingle();
+              if (impErro) throw new Error(impErro.message);
+              if (!impAtiva) throw new Error("Não existe importação ativa para esta base e dia operacional.");
+
+              const PAGE = 1000;
+              const linhas: Array<{
+                shipment: string | null;
+                planejada: string | null;
+                otimizada: string | null;
+                triado: boolean | null;
+              }> = [];
+              for (let from = 0; ; from += PAGE) {
+                const { data: page, error } = await supabase
+                  .from("escalas")
+                  .select("shipment, planejada, otimizada, triado")
+                  .eq("importacao_id", impAtiva.id)
+                  .order("id", { ascending: true })
+                  .range(from, from + PAGE - 1);
+                if (error) throw new Error(error.message);
+                if (!page?.length) break;
+                linhas.push(...page);
+                if (page.length < PAGE) break;
+              }
+
+              const linhasRota = linhas.filter(
+                (linha) => linha.shipment?.trim() && rotaEfetivaTriagem(linha) === data.rota,
+              );
+              const previstos = linhasRota.length;
+              const triados = linhasRota.filter((linha) => !!linha.triado).length;
+              const faltantes = Math.max(previstos - triados, 0);
+
+              if (previstos === 0) throw new Error("Rota não encontrada na importação ativa.");
+              if (faltantes === 0) throw new Error("A rota já está 100% concluída e não precisa de ressalva.");
+
+              const concluidaEm = new Date().toISOString();
+              const { ip, user_agent } = auditRequestMeta();
+              const { error: auditErro } = await supabaseAdmin.from("audit_logs").insert({
+                user_id: userId,
+                acao: "triagem.rota_concluida_ressalva",
+                entidade: "importacao_escala",
+                entidade_id: impAtiva.id,
+                detalhes: {
+                  rota: data.rota,
+                  motivo: data.motivo,
+                  previstos,
+                  triados,
+                  faltantes,
+                  base_id: data.baseId,
+                  data_operacional: data.dataOperacional,
+                  status: "concluida_ressalva",
+                } as never,
+                ip,
+                user_agent,
+              });
+              if (auditErro) throw new Error(`Não foi possível registrar a conclusão: ${auditErro.message}`);
+
+              return { rota: data.rota, motivo: data.motivo, previstos, triados, faltantes, concluidaEm, concluidaPor: userId };
+            });
+          '''
+          text = replace_once(text, marker, addition, "backend: função concluir com ressalva")
+
+          old = '''    return resumirRotasTriagem(linhas);
+            });
+          '''
+          new = '''    const resumo = resumirRotasTriagem(linhas);
+              const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+              const { data: conclusoes } = await supabaseAdmin
+                .from("audit_logs")
+                .select("user_id, created_at, detalhes")
+                .eq("acao", "triagem.rota_concluida_ressalva")
+                .eq("entidade", "importacao_escala")
+                .eq("entidade_id", impAtiva.id)
+                .order("created_at", { ascending: false });
+
+              const porRota = new Map<string, { motivo: string; concluidaEm: string; concluidaPor: string; faltantes: number }>();
+              for (const registro of conclusoes ?? []) {
+                const detalhes = (registro.detalhes ?? {}) as Record<string, unknown>;
+                const rota = typeof detalhes.rota === "string" ? detalhes.rota : null;
+                if (!rota || porRota.has(rota)) continue;
+                porRota.set(rota, {
+                  motivo: String(detalhes.motivo ?? "Motivo não informado"),
+                  concluidaEm: registro.created_at,
+                  concluidaPor: registro.user_id,
+                  faltantes: Number(detalhes.faltantes ?? 0),
+                });
+              }
+
+              return resumo.map((rota) => {
+                const ressalva = porRota.get(rota.rota);
+                return ressalva ? { ...rota, status: "concluida_ressalva" as const, conclusaoRessalva: ressalva } : rota;
+              });
+            });
+          '''
+          text = replace_once(text, old, new, "backend: status no resumo")
+          backend.write_text(text, encoding="utf-8")
+
+          frontend = Path("src/routes/_authenticated/triagem.tsx")
+          text = frontend.read_text(encoding="utf-8")
+          text = replace_once(text, '  localizarShipmentTriagem,\n  type TriagemResult,', '  localizarShipmentTriagem,\n  concluirRotaComRessalva,\n  type TriagemResult,', "frontend: import função")
+          text = replace_once(text, 'import { Input } from "@/components/ui/input";', 'import { Input } from "@/components/ui/input";\nimport { Textarea } from "@/components/ui/textarea";', "frontend: textarea")
+          text = replace_once(text, '  const localizarFn = useServerFn(localizarShipmentTriagem);', '  const localizarFn = useServerFn(localizarShipmentTriagem);\n  const concluirRessalvaFn = useServerFn(concluirRotaComRessalva);', "frontend: server fn")
+          text = replace_once(text, '  const [resultadoConsulta, setResultadoConsulta] = useState<LocalizacaoShipmentTriagem | null>(\n    null,\n  );', '  const [resultadoConsulta, setResultadoConsulta] = useState<LocalizacaoShipmentTriagem | null>(\n    null,\n  );\n  const [dialogRessalvaAberto, setDialogRessalvaAberto] = useState(false);\n  const [motivoRessalva, setMotivoRessalva] = useState("");', "frontend: estados")
+
+          mutation_marker = '  const localizarMutation = useMutation({\n'
+          mutation = '''  const concluirRessalvaMutation = useMutation({
+            mutationFn: () => {
+              if (!rotaSelecionada) throw new Error("Selecione uma rota.");
+              return concluirRessalvaFn({ data: { baseId, dataOperacional, rota: rotaSelecionada, motivo: motivoRessalva.trim() } });
+            },
+            onSuccess: (resultado) => {
+              qc.invalidateQueries({ queryKey: ["triagem-rotas", baseId, dataOperacional] });
+              setDialogRessalvaAberto(false);
+              setMotivoRessalva("");
+              toast.success(`Rota ${resultado.rota} concluída com ressalva — ${resultado.faltantes} item(ns) faltante(s).`, { duration: 7000 });
+            },
+            onError: (erro: unknown) => {
+              beepError();
+              toast.error(erro instanceof Error ? erro.message : "Falha ao concluir a rota com ressalva.");
+            },
+          });
+
+          '''
+          text = replace_once(text, mutation_marker, mutation + mutation_marker, "frontend: mutation")
+          text = replace_once(text, '  const rotaAtual = (rotas.data ?? []).find((r) => r.rota === rotaSelecionada) ?? null;', '  const rotaAtual = (rotas.data ?? []).find((r) => r.rota === rotaSelecionada) ?? null;\n  const rotaConcluidaRessalva = rotaAtual?.status === "concluida_ressalva";', "frontend: status")
+
+          text = replace_once(text,
+          '''          className={`p-4 md:p-6 border-2 ${
+            rotaAtual?.percentual === 100
+              ? "border-success bg-success/5"
+              : "border-destructive bg-destructive/5"
+          }`}''',
+          '''          className={`p-4 md:p-6 border-2 ${
+            rotaConcluidaRessalva
+              ? "border-amber-500 bg-amber-50/80"
+              : rotaAtual?.percentual === 100
+                ? "border-success bg-success/5"
+                : "border-destructive bg-destructive/5"
+          }`}''', "frontend: card")
+
+          text = replace_once(text,
+          '''                rotaAtual?.percentual === 100
+                  ? "bg-success text-success-foreground"
+                  : "bg-destructive text-destructive-foreground"
+              }
+            >
+              {rotaAtual?.percentual === 100 ? "100% concluída" : "Incompleta"}''',
+          '''                rotaConcluidaRessalva
+                  ? "bg-amber-500 text-white"
+                  : rotaAtual?.percentual === 100
+                    ? "bg-success text-success-foreground"
+                    : "bg-destructive text-destructive-foreground"
+              }
+            >
+              {rotaConcluidaRessalva ? "Concluída com ressalva" : rotaAtual?.percentual === 100 ? "100% concluída" : "Incompleta"}''', "frontend: badge")
+
+          text = replace_once(text,
+          '''              rotaAtual?.percentual === 100
+                ? "bg-success/20 [&>div]:bg-success"
+                : "bg-destructive/20 [&>div]:bg-destructive"
+            }`}
+          />
+        </Card>''',
+          '''              rotaConcluidaRessalva
+                ? "bg-amber-200 [&>div]:bg-amber-500"
+                : rotaAtual?.percentual === 100
+                  ? "bg-success/20 [&>div]:bg-success"
+                  : "bg-destructive/20 [&>div]:bg-destructive"
+            }`}
+          />
+          {rotaConcluidaRessalva && rotaAtual?.conclusaoRessalva ? (
+            <div className="mt-4 rounded-lg border border-amber-300 bg-amber-100/70 p-3 text-sm">
+              <div className="font-semibold text-amber-800">Concluída com ressalva</div>
+              <div className="mt-1 text-amber-900">Motivo: {rotaAtual.conclusaoRessalva.motivo}</div>
+            </div>
+          ) : rotaAtual && rotaAtual.percentual < 100 ? (
+            <div className="mt-4 flex justify-end">
+              <Button type="button" variant="outline" className="border-amber-500 text-amber-700 hover:bg-amber-50 gap-2" onClick={() => setDialogRessalvaAberto(true)}>
+                <AlertTriangle className="w-4 h-4" /> Concluir com itens faltantes
+              </Button>
+            </div>
+          ) : null}
+        </Card>''', "frontend: botão")
+
+          text = replace_once(text, '                   disabled={!rotaSelecionada}', '                   disabled={!rotaSelecionada || rotaConcluidaRessalva}', "frontend: bloquear scanner")
+
+          dialog_marker = '      <RotaDetalheDialog\n        rota={rotaDetalhe}'
+          dialog = '''      <Dialog open={dialogRessalvaAberto} onOpenChange={(aberto) => { setDialogRessalvaAberto(aberto); if (!aberto) setMotivoRessalva(""); }}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Concluir rota com itens faltantes</DialogTitle>
+                <DialogDescription>
+                  A rota {rotaSelecionada} possui {rotaAtual?.pendentes ?? 0} item(ns) faltante(s). Informe o motivo da conclusão.
+                </DialogDescription>
+              </DialogHeader>
+              <Textarea value={motivoRessalva} onChange={(e) => setMotivoRessalva(e.target.value)} placeholder="Descreva o motivo da conclusão com itens faltantes..." rows={5} maxLength={1000} autoFocus />
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setDialogRessalvaAberto(false)}>Cancelar</Button>
+                <Button type="button" className="bg-amber-600 text-white hover:bg-amber-700" onClick={() => concluirRessalvaMutation.mutate()} disabled={motivoRessalva.trim().length < 5 || concluirRessalvaMutation.isPending}>
+                  Concluir com ressalva
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          '''
+          text = replace_once(text, dialog_marker, dialog + dialog_marker, "frontend: dialog")
+
+          text = replace_once(text, '  status: "aberta" | "fechada";\n};', '  status: "aberta" | "fechada" | "concluida_ressalva";\n  conclusaoRessalva?: { motivo: string; concluidaEm: string; concluidaPor: string; faltantes: number };\n};', "frontend: tipo")
+          text = replace_once(text, '  const abertas = rotas.filter((r) => r.status === "aberta");\n  const fechadas = rotas.filter((r) => r.status === "fechada");', '  const abertas = rotas.filter((r) => r.status === "aberta");\n  const ressalvas = rotas.filter((r) => r.status === "concluida_ressalva");\n  const fechadas = rotas.filter((r) => r.status === "fechada");', "frontend: grupos")
+          text = replace_once(text, '{[...abertas, ...fechadas].map((r) => {\n            const isSel = r.rota === selecionada;\n            const fechada = r.status === "fechada";', '{[...abertas, ...ressalvas, ...fechadas].map((r) => {\n            const isSel = r.rota === selecionada;\n            const fechada = r.status === "fechada";\n            const comRessalva = r.status === "concluida_ressalva";', "frontend: lista")
+          text = replace_once(text, ': fechada\n                      ? "border-success/50 bg-success/5 hover:bg-success/10"', ': comRessalva\n                      ? "border-amber-500/70 bg-amber-50 hover:bg-amber-100"\n                      : fechada\n                        ? "border-success/50 bg-success/5 hover:bg-success/10"', "frontend: cor lista")
+          text = replace_once(text, '                        fechada\n                          ? "bg-success text-success-foreground"', '                        comRessalva\n                          ? "bg-amber-500 text-white"\n                          : fechada\n                            ? "bg-success text-success-foreground"', "frontend: badge lista")
+          text = replace_once(text, '{fechada ? "Fechada" : "Aberta"}', '{comRessalva ? "Com ressalva" : fechada ? "Fechada" : "Aberta"}', "frontend: label lista")
+          frontend.write_text(text, encoding="utf-8")
+
+          Path(".github/workflows/implementa-conclusao-ressalva.yml").unlink()
+
+      - name: Commitar implementação
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: permite concluir rota com itens faltantes e ressalva"
+          git push origin main

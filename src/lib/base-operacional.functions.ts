@@ -400,6 +400,7 @@ export const ativarBase = createServerFn({ method: "POST" })
 
 export type ContextoBaseOperacional = {
   isAdmin: boolean;
+  podeSelecionarBase: boolean;
   ativo: boolean;
   baseFixa: { id: string; codigo: string; nome: string; cidade: string | null } | null;
 };
@@ -408,26 +409,40 @@ export const contextoBaseOperacional = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<ContextoBaseOperacional> => {
     const { supabase, userId } = context;
-    const [{ data: prof }, { data: roles }] = await Promise.all([
+    const [{ data: prof }, { data: roles }, { data: extras }] = await Promise.all([
       supabase
         .from("profiles")
         .select("base_id, ativo, bases(id, codigo, nome, cidade)")
         .eq("id", userId)
         .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase
+        .from("user_bases")
+        .select("base_id, bases(id, codigo, nome, cidade)")
+        .eq("user_id", userId),
     ]);
     const rolesArr = (roles ?? []).map((r) => r.role as string);
     const isAdmin = rolesArr.includes("admin");
     const ativo = prof?.ativo !== false;
-    let baseFixa: ContextoBaseOperacional["baseFixa"] = null;
+    const basesPermitidas = new Map<
+      string,
+      { id: string; codigo: string; nome: string; cidade: string | null }
+    >();
     if (prof?.base_id && prof.bases) {
       const b = prof.bases as { id: string; codigo: string; nome: string; cidade: string | null };
-      baseFixa = {
+      basesPermitidas.set(prof.base_id, {
         id: b.id ?? prof.base_id,
         codigo: b.codigo,
         nome: b.nome,
         cidade: b.cidade ?? null,
-      };
+      });
     }
-    return { isAdmin, ativo, baseFixa };
+    for (const extra of extras ?? []) {
+      const b = extra.bases as { id: string; codigo: string; nome: string; cidade: string | null } | null;
+      if (b?.id) basesPermitidas.set(b.id, b);
+    }
+    const permitidas = Array.from(basesPermitidas.values());
+    const baseFixa = !isAdmin && permitidas.length === 1 ? permitidas[0] : null;
+    const podeSelecionarBase = isAdmin || permitidas.length > 1;
+    return { isAdmin, podeSelecionarBase, ativo, baseFixa };
   });

@@ -42,9 +42,7 @@ function csvEscape(v: unknown): string {
 
 export function toCSV<T>(colunas: RelatorioColuna<T>[], linhas: T[]): string {
   const head = colunas.map((c) => csvEscape(c.header)).join(";");
-  const body = linhas
-    .map((r) => colunas.map((c) => csvEscape(c.value(r))).join(";"))
-    .join("\n");
+  const body = linhas.map((r) => colunas.map((c) => csvEscape(c.value(r))).join(";")).join("\n");
   return `${head}\n${body}`;
 }
 
@@ -119,10 +117,7 @@ export function montarHtmlRelatorio<T>(opts: RelatorioOptions<T>): string {
   const renderRows = (linhas: T[]) =>
     linhas
       .map(
-        (r) =>
-          `<tr>${opts.colunas
-            .map((c) => `<td>${escapeHtml(c.value(r))}</td>`)
-            .join("")}</tr>`,
+        (r) => `<tr>${opts.colunas.map((c) => `<td>${escapeHtml(c.value(r))}</td>`).join("")}</tr>`,
       )
       .join("");
 

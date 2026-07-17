@@ -86,16 +86,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "JM Transportes — Last Mile" },
-      { name: "description", content: "Plataforma operacional Last Mile da JM Transportes." },
+      { title: "JM Transportes — Recebimento de Rotas" },
+      { name: "description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
       { name: "author", content: "JM Transportes" },
       { name: "theme-color", content: "#0F2348" },
-      { property: "og:title", content: "JM Transportes — Last Mile" },
-      { property: "og:description", content: "Plataforma operacional Last Mile da JM Transportes." },
+      { property: "og:title", content: "JM Transportes — Recebimento de Rotas" },
+      { property: "og:description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "JM Transportes — Last Mile" },
-      { name: "twitter:description", content: "Plataforma operacional Last Mile da JM Transportes." },
+      { name: "twitter:title", content: "JM Transportes — Recebimento de Rotas" },
+      { name: "twitter:description", content: "Sistema de recebimento de rotas Last Mile da JM Transportes. Bipagem, controle de volumes e dashboard em tempo real." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/IsZfQvVa6PQOsJcGkqOeqh8VJTp1/social-images/social-1783103120146-outro_jm.webp" },
     ],
@@ -104,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: jmLogo.url, type: "image/jpeg" },
       { rel: "apple-touch-icon", href: jmLogo.url },
     ],
   }),
@@ -133,32 +133,13 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    // ========================================================================
-    // ⚠️  REMOVER ANTES DO MERGE PARA PRODUÇÃO
-    // ------------------------------------------------------------------------
-    // O bloco try/catch abaixo existe SOMENTE para permitir a homologação
-    // visual em /preview-relatorios no JMRoutes Dev Playground sem
-    // credenciais Supabase. NÃO é uma correção definitiva de produção: em
-    // produção o cliente Supabase DEVE estar configurado e o listener de
-    // auth NÃO deve ser silenciado — este catch pode mascarar erro real de
-    // configuração ou falha de autenticação. Antes do merge, restaurar o
-    // corpo original (sem try/catch) e remover este comentário.
-    // ========================================================================
-    try {
-      const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-        if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-        router.invalidate();
-        if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-      });
-      return () => sub.subscription.unsubscribe();
-    } catch (err) {
-      // TEMPORÁRIO — ver bloco de aviso acima.
-      console.warn("[root] Supabase auth listener indisponível:", (err as Error).message);
-      return;
-    }
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      router.invalidate();
+      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    });
+    return () => sub.subscription.unsubscribe();
   }, [queryClient, router]);
-
-
 
   return (
     <QueryClientProvider client={queryClient}>

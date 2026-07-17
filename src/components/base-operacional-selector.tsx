@@ -43,9 +43,9 @@ export function RequireBaseOperacional({
   // Isso impede que um usuário veja o seletor de bases por milésimos de segundo.
   useEffect(() => {
     if (!ctxQ.data) return;
-    const { isAdmin, baseFixa, ativo } = ctxQ.data;
+    const { podeSelecionarBase, baseFixa, ativo } = ctxQ.data;
     if (!ativo) return;
-    if (!isAdmin) {
+    if (!podeSelecionarBase) {
       if (!baseFixa) {
         // Sem base vinculada: garante limpar seleção herdada
         if (base || diaOperacional) limpar();
@@ -78,7 +78,7 @@ export function RequireBaseOperacional({
       <BloqueioMsg titulo="Usuário inativo" mensagem="Usuário inativo. Contate o administrador." />
     );
   }
-  if (!ctx.isAdmin && !ctx.baseFixa) {
+  if (!ctx.podeSelecionarBase && !ctx.baseFixa) {
     return (
       <BloqueioMsg
         titulo="Sem base vinculada"
@@ -87,7 +87,7 @@ export function RequireBaseOperacional({
     );
   }
   // Não-admin com base fixa: bloqueia render até o effect acima ajustar
-  if (!ctx.isAdmin && ctx.baseFixa && (!base || base.id !== ctx.baseFixa.id)) {
+  if (!ctx.podeSelecionarBase && ctx.baseFixa && (!base || base.id !== ctx.baseFixa.id)) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground">
         Ajustando base operacional…
@@ -99,7 +99,7 @@ export function RequireBaseOperacional({
       <SeletorBaseDia
         titulo={titulo}
         descricao={descricao}
-        isAdmin={ctx.isAdmin}
+        isAdmin={ctx.podeSelecionarBase}
         baseFixa={ctx.baseFixa}
       />
     );

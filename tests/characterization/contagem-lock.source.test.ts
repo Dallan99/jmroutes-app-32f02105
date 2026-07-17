@@ -8,10 +8,7 @@ import { resolve } from "node:path";
 // se ela invoca `resolveBaseOperacionalAutorizada`. Isso evita que uma
 // única ocorrência global do helper "vaze" a regex para outra função e
 // dê um falso positivo.
-const src = readFileSync(
-  resolve(process.cwd(), "src/lib/contagem-lock.functions.ts"),
-  "utf8",
-);
+const src = readFileSync(resolve(process.cwd(), "src/lib/contagem-lock.functions.ts"), "utf8");
 
 /**
  * Extrai o corpo de `export const <nome> = ...` até o próximo

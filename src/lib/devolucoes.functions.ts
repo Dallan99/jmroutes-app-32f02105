@@ -138,7 +138,7 @@ export const registrarDevolucao = createServerFn({ method: "POST" })
 
 /** Página do PostgREST — limite duro de 1000 registros por consulta. */
 export const DEVOLUCOES_PAGE = 1000;
-/** Proteção contra loop infinito: até 100 páginas (1M registros). */
+/** Proteção contra loop infinito: até 100 páginas de dados (100 mil registros). */
 export const DEVOLUCOES_MAX_PAGES = 100;
 
 export type PaginaDevolucao = {
@@ -153,7 +153,10 @@ export type PaginaDevolucao = {
  * aplica slice, limit final ou deduplicação.
  */
 export async function paginarTodasDevolucoes<T>(
-  fetchPage: (from: number, to: number) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => Promise<{ data: T[] | null; error: { message: string } | null }>,
   page: number = DEVOLUCOES_PAGE,
   maxPages: number = DEVOLUCOES_MAX_PAGES,
 ): Promise<T[]> {
@@ -167,6 +170,15 @@ export async function paginarTodasDevolucoes<T>(
     out.push(...rows);
     if (rows.length < page) return out;
   }
+
+  // Quando a última página permitida vem exatamente cheia, é necessária uma
+  // consulta vazia adicional para distinguir "exatamente no limite" de
+  // "existem mais dados". Essa consulta não adiciona registros ao resultado.
+  const probeFrom = maxPages * page;
+  const { data: probeRows, error: probeError } = await fetchPage(probeFrom, probeFrom + page - 1);
+  if (probeError) throw new Error(probeError.message);
+  if (!probeRows || probeRows.length === 0) return out;
+
   throw new Error(
     `Limite técnico de ${maxPages} páginas atingido em listarDevolucoes (mais de ${maxPages * page} registros). Ajuste o filtro de dia/base.`,
   );
@@ -188,18 +200,18 @@ export function filtrarDevolucoesPorRota<T extends { rota: string | null; cancel
   rotaAlvo: string | null,
 ): T[] {
   const alvo = rotaAlvo === null ? null : normalizarRotaDevolucao(rotaAlvo);
-  return linhas.filter(
-    (l) => !l.cancelado && normalizarRotaDevolucao(l.rota) === alvo,
-  );
+  return linhas.filter((l) => !l.cancelado && normalizarRotaDevolucao(l.rota) === alvo);
 }
 
 export const listarDevolucoes = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({
-      baseId: z.string().uuid(),
-      diaOperacional: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    }).parse(data),
+    z
+      .object({
+        baseId: z.string().uuid(),
+        diaOperacional: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(data),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -220,21 +232,27 @@ export const listarDevolucoes = createServerFn({ method: "POST" })
       devolvido_por: string | null;
     };
 
-    const rows = await paginarTodasDevolucoes<Row>((from, to) =>
-      supabase
-        .from("devolucoes")
-        .select(
-          "id, shipment_codigo, motivo, observacao, rota, motorista, devolvido_em, cancelado, devolvido_por",
-        )
-        .eq("base_id", data.baseId)
-        .gte("devolvido_em", inicio)
-        .lte("devolvido_em", fim)
-        .order("devolvido_em", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to) as unknown as Promise<{ data: Row[] | null; error: { message: string } | null }>,
+    const rows = await paginarTodasDevolucoes<Row>(
+      (from, to) =>
+        supabase
+          .from("devolucoes")
+          .select(
+            "id, shipment_codigo, motivo, observacao, rota, motorista, devolvido_em, cancelado, devolvido_por",
+          )
+          .eq("base_id", data.baseId)
+          .gte("devolvido_em", inicio)
+          .lte("devolvido_em", fim)
+          .order("devolvido_em", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as Promise<{
+          data: Row[] | null;
+          error: { message: string } | null;
+        }>,
     );
 
-    const userIds = Array.from(new Set(rows.map((r) => r.devolvido_por).filter(Boolean))) as string[];
+    const userIds = Array.from(
+      new Set(rows.map((r) => r.devolvido_por).filter(Boolean)),
+    ) as string[];
     const nomes = new Map<string, string>();
     if (userIds.length > 0) {
       const { data: profs } = await supabase.from("profiles").select("id, nome").in("id", userIds);
@@ -249,15 +267,13 @@ export const listarDevolucoes = createServerFn({ method: "POST" })
       motorista: r.motorista,
       devolvido_em: r.devolvido_em,
       cancelado: r.cancelado,
-      operador_nome: r.devolvido_por ? nomes.get(r.devolvido_por) ?? null : null,
+      operador_nome: r.devolvido_por ? (nomes.get(r.devolvido_por) ?? null) : null,
     }));
   });
 
 export const cancelarDevolucao = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
-    z.object({ id: z.string().uuid() }).parse(data),
-  )
+  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: dev, error } = await supabase
