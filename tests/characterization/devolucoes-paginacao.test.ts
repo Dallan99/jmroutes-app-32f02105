@@ -61,6 +61,20 @@ describe("paginarTodasDevolucoes — 1.205 registros em duas páginas", () => {
       ),
     ).rejects.toThrowError(/Limite técnico/);
   });
+
+  it("aceita quantidade exatamente igual ao limite quando a página de prova vem vazia", async () => {
+    const total = DEVOLUCOES_PAGE * 3;
+    const rows = await paginarTodasDevolucoes<Row>(
+      async (from, to) => ({
+        data: makePage(from, Math.max(0, Math.min(total - from, to - from + 1))),
+        error: null,
+      }),
+      DEVOLUCOES_PAGE,
+      3,
+    );
+    expect(rows).toHaveLength(total);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(total);
+  });
 });
 
 // Test B — impressão de uma rota específica: filtro puro, sem outras
