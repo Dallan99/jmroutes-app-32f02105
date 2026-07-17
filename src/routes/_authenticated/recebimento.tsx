@@ -38,7 +38,7 @@ function RecebimentoGuard() {
 }
 
 function RecebimentoComHeader() {
-  const { base, diaOperacional, limpar } = useBaseOperacional();
+  const { base, diaOperacional } = useBaseOperacional();
   return (
     <>
       <div className="border-b bg-muted/30 px-4 md:px-6 py-2 flex items-center gap-3 flex-wrap text-xs">
@@ -47,15 +47,6 @@ function RecebimentoComHeader() {
         <span>Base: <b>{base?.nome ?? "—"}</b>{base?.codigo && <span className="font-mono text-muted-foreground"> ({base.codigo})</span>}</span>
         <span className="text-muted-foreground">·</span>
         <span>Dia Operacional: <b className="font-mono">{diaOperacional ? new Date(diaOperacional + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</b></span>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto h-7 px-2 text-xs"
-          onClick={limpar}
-          title="Trocar base ou dia operacional"
-        >
-          <Building2 className="w-3.5 h-3.5 mr-1" /> Trocar base / dia
-        </Button>
       </div>
       <RecebimentoPage />
     </>
