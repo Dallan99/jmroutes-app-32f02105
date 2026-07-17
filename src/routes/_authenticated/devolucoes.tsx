@@ -26,13 +26,29 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { RequireBaseOperacional } from "@/components/base-operacional-selector";
 import { useBaseOperacional } from "@/lib/base-operacional-context";
 import { beepError, beepOk, beepWarn } from "@/lib/scanner-sound";
 import { toast } from "sonner";
-import { RotateCcw, ScanLine, AlertTriangle, XCircle, CheckCircle2, Trash2, Printer, Download } from "lucide-react";
+import {
+  RotateCcw,
+  ScanLine,
+  AlertTriangle,
+  XCircle,
+  CheckCircle2,
+  Trash2,
+  Printer,
+  Download,
+} from "lucide-react";
 import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
 import {
   DropdownMenu,
@@ -64,9 +80,21 @@ function DevolucoesComHeader() {
       <div className="border-b bg-muted/30 px-4 md:px-6 py-2 flex items-center gap-3 flex-wrap text-xs">
         <span className="font-display font-semibold text-sm">Devoluções</span>
         <span className="text-muted-foreground">·</span>
-        <span>Base: <b>{base?.nome ?? "—"}</b>{base?.codigo && <span className="font-mono text-muted-foreground"> ({base.codigo})</span>}</span>
+        <span>
+          Base: <b>{base?.nome ?? "—"}</b>
+          {base?.codigo && (
+            <span className="font-mono text-muted-foreground"> ({base.codigo})</span>
+          )}
+        </span>
         <span className="text-muted-foreground">·</span>
-        <span>Dia Operacional: <b className="font-mono">{diaOperacional ? new Date(diaOperacional + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</b></span>
+        <span>
+          Dia Operacional:{" "}
+          <b className="font-mono">
+            {diaOperacional
+              ? new Date(diaOperacional + "T00:00:00").toLocaleDateString("pt-BR")
+              : "—"}
+          </b>
+        </span>
       </div>
       <DevolucoesPage />
     </>
@@ -145,31 +173,42 @@ function DevolucoesPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Erro"),
   });
 
-  const abrirModal = useCallback((cod: string) => {
-    const c = cod.trim();
-    if (c.length < 1) return;
-    setPendente(c);
-    setRotaInput(rotaSessao);
-    setCodigo("");
-  }, [rotaSessao]);
+  const abrirModal = useCallback(
+    (cod: string) => {
+      const c = cod.trim();
+      if (c.length < 1) return;
+      setPendente(c);
+      setRotaInput(rotaSessao);
+      setCodigo("");
+    },
+    [rotaSessao],
+  );
 
   const totalHoje = lista.data?.filter((d) => !d.cancelado).length ?? 0;
   const motivosCount = useMemo(() => {
     const map = new Map<MotivoDevolucao, number>();
-    (lista.data ?? []).filter((d) => !d.cancelado).forEach((d) => {
-      map.set(d.motivo, (map.get(d.motivo) ?? 0) + 1);
-    });
+    (lista.data ?? [])
+      .filter((d) => !d.cancelado)
+      .forEach((d) => {
+        map.set(d.motivo, (map.get(d.motivo) ?? 0) + 1);
+      });
     return map;
   }, [lista.data]);
 
   type LinhaDev = NonNullable<typeof lista.data>[number];
 
   const colunasDevolucao = [
-    { header: "Hora", value: (d: LinhaDev) => new Date(d.devolvido_em).toLocaleTimeString("pt-BR") },
+    {
+      header: "Hora",
+      value: (d: LinhaDev) => new Date(d.devolvido_em).toLocaleTimeString("pt-BR"),
+    },
     { header: "ID do produto", value: (d: LinhaDev) => d.shipment_codigo },
     { header: "Rota", value: (d: LinhaDev) => d.rota ?? "" },
     { header: "Motorista", value: (d: LinhaDev) => d.motorista ?? "" },
-    { header: "Motivo", value: (d: LinhaDev) => MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo },
+    {
+      header: "Motivo",
+      value: (d: LinhaDev) => MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo,
+    },
     { header: "Operador", value: (d: LinhaDev) => d.operador_nome ?? "" },
     { header: "Observação", value: (d: LinhaDev) => d.observacao ?? "" },
   ] as const;
@@ -266,7 +305,6 @@ function DevolucoesPage() {
   };
   const baixarCsvRota = (grupo: GrupoRota) => baixarCSV(configRota(grupo));
 
-
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
       <Card className="p-4 md:p-6">
@@ -280,7 +318,9 @@ function DevolucoesPage() {
 
         <div className="mb-4 rounded-md border bg-muted/30 p-3 flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[220px]">
-            <Label htmlFor="rota-sessao" className="text-xs">Rota atual (aplicada a todas as devoluções abaixo)</Label>
+            <Label htmlFor="rota-sessao" className="text-xs">
+              Rota atual (aplicada a todas as devoluções abaixo)
+            </Label>
             <Input
               id="rota-sessao"
               value={rotaSessao}
@@ -295,7 +335,8 @@ function DevolucoesPage() {
             </Button>
           )}
           <div className="text-[11px] text-muted-foreground max-w-xs">
-            Bipagens abaixo virão com esta rota preenchida automaticamente. Você ainda pode alterar no momento da confirmação.
+            Bipagens abaixo virão com esta rota preenchida automaticamente. Você ainda pode alterar
+            no momento da confirmação.
           </div>
         </div>
 
@@ -322,7 +363,10 @@ function DevolucoesPage() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="lg" variant="outline"><Download className="w-4 h-4 mr-2" />Salvar/Imprimir</Button>
+              <Button size="lg" variant="outline">
+                <Download className="w-4 h-4 mr-2" />
+                Salvar/Imprimir
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={imprimir}>
@@ -331,7 +375,12 @@ function DevolucoesPage() {
               <DropdownMenuItem onClick={imprimirPorRota}>
                 <Printer className="w-4 h-4 mr-2" /> Imprimir agrupado por rota
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setRotaBusca(""); setRotaDialogOpen(true); }}>
+              <DropdownMenuItem
+                onClick={() => {
+                  setRotaBusca("");
+                  setRotaDialogOpen(true);
+                }}
+              >
                 <Printer className="w-4 h-4 mr-2" /> Imprimir uma rota…
               </DropdownMenuItem>
               <DropdownMenuItem onClick={baixarCsv}>
@@ -342,10 +391,18 @@ function DevolucoesPage() {
         </div>
 
         {ultimo && ultimo.resultado !== "ok" && (
-          <div className={`mt-3 flex items-center gap-2 text-sm ${
-            ultimo.resultado === "duplicado" ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"
-          }`}>
-            {ultimo.resultado === "duplicado" ? <AlertTriangle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+          <div
+            className={`mt-3 flex items-center gap-2 text-sm ${
+              ultimo.resultado === "duplicado"
+                ? "text-amber-700 dark:text-amber-400"
+                : "text-red-700 dark:text-red-400"
+            }`}
+          >
+            {ultimo.resultado === "duplicado" ? (
+              <AlertTriangle className="w-4 h-4" />
+            ) : (
+              <XCircle className="w-4 h-4" />
+            )}
             <span>{ultimo.mensagem}</span>
           </div>
         )}
@@ -378,14 +435,16 @@ function DevolucoesPage() {
               className="h-8 w-[160px]"
             />
             {!consultandoHoje && (
-              <Button variant="ghost" size="sm" onClick={() => setDiaHistorico(diaOperacional ?? "")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDiaHistorico(diaOperacional ?? "")}
+              >
                 Voltar para hoje
               </Button>
             )}
           </div>
-          <span className="text-xs text-muted-foreground">
-            {lista.data?.length ?? 0} registros
-          </span>
+          <span className="text-xs text-muted-foreground">{lista.data?.length ?? 0} registros</span>
         </div>
         <div className="overflow-auto">
           <Table>
@@ -403,24 +462,42 @@ function DevolucoesPage() {
             </TableHeader>
             <TableBody>
               {lista.isLoading && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                    Carregando…
+                  </TableCell>
+                </TableRow>
               )}
               {!lista.isLoading && (lista.data?.length ?? 0) === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma devolução registrada hoje.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                    Nenhuma devolução registrada hoje.
+                  </TableCell>
+                </TableRow>
               )}
               {(lista.data ?? []).map((d) => {
                 const motivoLabel = MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo;
                 return (
                   <TableRow key={d.id} className={d.cancelado ? "opacity-50 line-through" : ""}>
                     <TableCell className="font-mono text-xs">
-                      {new Date(d.devolvido_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(d.devolvido_em).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </TableCell>
                     <TableCell className="font-mono">{d.shipment_codigo}</TableCell>
                     <TableCell className="font-mono text-xs">{d.rota ?? "—"}</TableCell>
                     <TableCell className="text-xs">{d.motorista ?? "—"}</TableCell>
-                    <TableCell><Badge variant="outline">{motivoLabel}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{motivoLabel}</Badge>
+                    </TableCell>
                     <TableCell className="text-xs">{d.operador_nome ?? "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[220px] truncate" title={d.observacao ?? ""}>{d.observacao ?? "—"}</TableCell>
+                    <TableCell
+                      className="text-xs max-w-[220px] truncate"
+                      title={d.observacao ?? ""}
+                    >
+                      {d.observacao ?? "—"}
+                    </TableCell>
                     <TableCell>
                       {!d.cancelado && (
                         <Button
@@ -462,9 +539,16 @@ function DevolucoesPage() {
             </div>
             <div className="space-y-2">
               <Label>Motivo</Label>
-              <RadioGroup value={motivo} onValueChange={(v) => setMotivo(v as MotivoDevolucao)} className="grid grid-cols-1 gap-1.5">
+              <RadioGroup
+                value={motivo}
+                onValueChange={(v) => setMotivo(v as MotivoDevolucao)}
+                className="grid grid-cols-1 gap-1.5"
+              >
                 {MOTIVOS.map((m) => (
-                  <label key={m.value} className="flex items-center gap-2 border rounded-md p-2 cursor-pointer hover:bg-muted/30">
+                  <label
+                    key={m.value}
+                    className="flex items-center gap-2 border rounded-md p-2 cursor-pointer hover:bg-muted/30"
+                  >
                     <RadioGroupItem value={m.value} />
                     <span className="text-sm">{m.label}</span>
                   </label>
@@ -473,13 +557,27 @@ function DevolucoesPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="obs">Observação (opcional)</Label>
-              <Textarea id="obs" value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Detalhes adicionais…" rows={3} />
+              <Textarea
+                id="obs"
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                placeholder="Detalhes adicionais…"
+                rows={3}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendente(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setPendente(null)}>
+              Cancelar
+            </Button>
             <Button onClick={() => registrar.mutate()} disabled={registrar.isPending}>
-              {registrar.isPending ? "Salvando…" : (<><CheckCircle2 className="w-4 h-4 mr-1" /> Confirmar devolução</>)}
+              {registrar.isPending ? (
+                "Salvando…"
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> Confirmar devolução
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -490,7 +588,9 @@ function DevolucoesPage() {
           <DialogHeader>
             <DialogTitle>Imprimir uma rota</DialogTitle>
             <DialogDescription>
-              Escolha a rota do dia {diaAtivo ? new Date(diaAtivo + "T00:00:00").toLocaleDateString("pt-BR") : ""} — base {base?.codigo ?? "?"}. Cancelados são ignorados.
+              Escolha a rota do dia{" "}
+              {diaAtivo ? new Date(diaAtivo + "T00:00:00").toLocaleDateString("pt-BR") : ""} — base{" "}
+              {base?.codigo ?? "?"}. Cancelados são ignorados.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -517,10 +617,20 @@ function DevolucoesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="outline" onClick={() => imprimirRotaEspecifica(g)} className="h-8 gap-1 text-xs">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => imprimirRotaEspecifica(g)}
+                        className="h-8 gap-1 text-xs"
+                      >
                         <Printer className="w-3 h-3" /> Imprimir
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => baixarCsvRota(g)} className="h-8 gap-1 text-xs">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => baixarCsvRota(g)}
+                        className="h-8 gap-1 text-xs"
+                      >
                         <Download className="w-3 h-3" /> CSV
                       </Button>
                     </div>
@@ -530,7 +640,9 @@ function DevolucoesPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRotaDialogOpen(false)}>Fechar</Button>
+            <Button variant="outline" onClick={() => setRotaDialogOpen(false)}>
+              Fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
