@@ -112,7 +112,7 @@ export const listarInventarioCentral = createServerFn({ method: "POST" })
     });
     if (filtros.usuario) {
       const termo = filtros.usuario.toLocaleUpperCase("pt-BR");
-      leituras = leituras.filter((l) => (l.bipado_por_nome ?? "").toLocaleUpperCase("pt-BR").includes(termo));
+      leituras = leituras.filter((l: InventarioCentralLinha) => (l.bipado_por_nome ?? "").toLocaleUpperCase("pt-BR").includes(termo));
     }
 
     const totalPorInventario = new Map<string, number>();
