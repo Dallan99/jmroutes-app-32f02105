@@ -1,5 +1,3 @@
-import jmLogo from "@/assets/jm-logo.jpeg.asset.json";
-
 export function JmLogo({
   size = 36,
   className,
@@ -8,20 +6,26 @@ export function JmLogo({
   className?: string;
 }) {
   return (
-    <img
-      src={jmLogo.url}
-      alt="JM Transportes"
-      width={size}
-      height={size}
+    <div
+      aria-label="JM Transportes"
       className={className}
-      onError={(e) => {
-        (e.currentTarget as HTMLImageElement).style.display = "none";
-      }}
       style={{
+        width: size,
+        height: size,
         borderRadius: 6,
-        objectFit: "contain",
+        background: "linear-gradient(135deg, #f59e0b, #b45309)",
+        color: "white",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 800,
+        fontSize: size * 0.42,
+        letterSpacing: "-0.03em",
+        fontFamily: "system-ui, sans-serif",
       }}
-    />
+    >
+      JM
+    </div>
   );
 }
 
