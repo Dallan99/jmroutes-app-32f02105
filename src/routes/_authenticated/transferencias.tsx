@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
-  ExternalLink,
   Pencil,
   Plus,
   RefreshCcw,
@@ -28,15 +30,12 @@ import {
   listarTransferencias,
   proximaEtapa,
   registrarMarcoTransferencia,
+  TRANSFERENCIA_ETAPAS,
   type TransferenciaDetalhe,
   type TransferenciaEtapa,
 } from "@/lib/transferencias.functions";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  criarTransferenciasLote,
-  registrarMarcosTransferenciaLote,
-  type LinhaCadastroTransferencia,
-} from "@/lib/transferencias-lote.functions";
+import { criarTransferenciasLote } from "@/lib/transferencias-lote.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +61,9 @@ export const Route = createFileRoute("/_authenticated/transferencias")({
   component: TransferenciasGuard,
 });
 
+// ============================================================
+// Helpers
+// ============================================================
 function hojeYmd() {
   const agora = new Date();
   const local = new Date(agora.getTime() - agora.getTimezoneOffset() * 60_000);
@@ -72,12 +74,10 @@ function dataHoraLocal(iso?: string) {
   data.setMinutes(data.getMinutes() - data.getTimezoneOffset());
   return data.toISOString().slice(0, 16);
 }
-
 function minutosEntre(inicio?: string, fim?: string) {
   if (!inicio || !fim) return null;
   return Math.max(0, Math.round((Date.parse(fim) - Date.parse(inicio)) / 60_000));
 }
-
 function duracao(minutos: number | null) {
   if (minutos == null) return "—";
   if (minutos < 60) return `${minutos} min`;
@@ -85,24 +85,9 @@ function duracao(minutos: number | null) {
   const m = minutos % 60;
   return `${h}h${String(m).padStart(2, "0")}`;
 }
-
-function minutosDoDiaEmSaoPaulo(iso?: string) {
-  if (!iso) return null;
-  const partes = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(iso));
-  const hora = Number(partes.find((parte) => parte.type === "hour")?.value);
-  const minuto = Number(partes.find((parte) => parte.type === "minute")?.value);
-  return Number.isFinite(hora) && Number.isFinite(minuto) ? hora * 60 + minuto : null;
-}
-
 function eventoDe(t: TransferenciaDetalhe, etapa: TransferenciaEtapa) {
   return t.eventos.find((e) => e.etapa === etapa);
 }
-
 function serviceDaBase(nome?: string) {
   const base = (nome ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (base.includes("ibiuna")) return "SSP20";
@@ -111,15 +96,103 @@ function serviceDaBase(nome?: string) {
   if (base.includes("franco")) return "SSP25";
   return "";
 }
-
 const SERVICES_OPERACIONAIS = ["SSP20", "SSP15", "SSP34", "SSP25"] as const;
 
-type RascunhoRota = LinhaCadastroTransferencia & { id: string };
+// -----------------------------------------------------------
+// Rotas (armazenadas como JSON no campo observacao)
+// -----------------------------------------------------------
+type Rota = { id: string; codigo: string; obs: string };
+type ObsPayload = { rotas: Rota[]; notas: string };
 
-function novoRascunho(service: string): RascunhoRota {
-  return { id: crypto.randomUUID(), service, motorista: "", placa: "", tipoVeiculo: "" };
+function parseObs(raw: string | null | undefined): ObsPayload {
+  if (!raw) return { rotas: [], notas: "" };
+  try {
+    const p = JSON.parse(raw);
+    if (p && typeof p === "object" && Array.isArray((p as ObsPayload).rotas)) {
+      return {
+        rotas: (p as ObsPayload).rotas.filter((r) => r && r.id && r.codigo != null),
+        notas: (p as ObsPayload).notas ?? "",
+      };
+    }
+  } catch {
+    /* legado texto puro */
+  }
+  return { rotas: [], notas: String(raw) };
+}
+function serializeObs(p: ObsPayload): string {
+  const limpo: ObsPayload = {
+    rotas: p.rotas.map((r) => ({ id: r.id, codigo: r.codigo.trim(), obs: (r.obs ?? "").trim() })),
+    notas: (p.notas ?? "").trim(),
+  };
+  if (limpo.rotas.length === 0 && !limpo.notas) return "";
+  return JSON.stringify(limpo);
 }
 
+// -----------------------------------------------------------
+// Status → Badge
+// -----------------------------------------------------------
+function statusInfo(status: string): { label: string; classe: string } {
+  switch (status) {
+    case "aguardando_chegada_service":
+      return { label: "Aguardando Service", classe: "bg-slate-200 text-slate-700" };
+    case "no_service":
+    case "pendente_evidencia":
+      return { label: "No Service", classe: "bg-sky-100 text-sky-700" };
+    case "em_transito_xpt":
+      return { label: "Em trânsito", classe: "bg-amber-100 text-amber-700" };
+    case "no_xpt":
+      return { label: "No XPT", classe: "bg-blue-100 text-blue-700" };
+    case "concluida_no_prazo":
+    case "concluida_com_atraso":
+      return { label: "Finalizada", classe: "bg-emerald-100 text-emerald-700" };
+    case "cancelada":
+      return { label: "Cancelada", classe: "bg-slate-200 text-slate-500" };
+    default:
+      return { label: status, classe: "bg-slate-200 text-slate-700" };
+  }
+}
+function StatusBadge({ status }: { status: string }) {
+  const info = statusInfo(status);
+  return (
+    <span className={`inline-flex px-2 py-1 rounded-full text-[11px] font-semibold ${info.classe}`}>
+      {info.label}
+    </span>
+  );
+}
+
+// -----------------------------------------------------------
+// Tempo aguardando carga com tick vivo
+// -----------------------------------------------------------
+function corAguardando(min: number | null): string {
+  if (min == null) return "text-muted-foreground";
+  if (min <= 30) return "text-emerald-600";
+  if (min <= 60) return "text-amber-600";
+  return "text-red-600 font-bold";
+}
+function useTickSeconds(intervalMs = 30_000) {
+  const [, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+}
+function TempoAguardandoCarga({ t }: { t: TransferenciaDetalhe }) {
+  useTickSeconds(30_000);
+  const chegada = eventoDe(t, "chegada_service")?.ocorrido_em;
+  const saida = eventoDe(t, "saida_service")?.ocorrido_em;
+  const emAndamento = !!chegada && !saida && t.status !== "cancelada";
+  const min = minutosEntre(chegada, saida ?? (emAndamento ? new Date().toISOString() : undefined));
+  return (
+    <span className={corAguardando(min)}>
+      {min == null ? "—" : duracao(min)}
+      {emAndamento && min != null && <span className="ml-1 text-[10px] uppercase">em curso</span>}
+    </span>
+  );
+}
+
+// ============================================================
+// Guard
+// ============================================================
 function TransferenciasGuard() {
   return (
     <RequireBaseOperacional
@@ -131,12 +204,14 @@ function TransferenciasGuard() {
   );
 }
 
+// ============================================================
+// Página principal
+// ============================================================
 function TransferenciasPage() {
   const { base, diaOperacional } = useBaseOperacional();
   const listarFn = useServerFn(listarTransferencias);
   const contextoFn = useServerFn(contextoBaseOperacional);
   const criarLoteFn = useServerFn(criarTransferenciasLote);
-  const marcoLoteFn = useServerFn(registrarMarcosTransferenciaLote);
   const marcoFn = useServerFn(registrarMarcoTransferencia);
   const corrigirMarcoFn = useServerFn(corrigirMarcoTransferencia);
   const editarFn = useServerFn(editarTransferencia);
@@ -144,19 +219,21 @@ function TransferenciasPage() {
   const qc = useQueryClient();
 
   const [dataRota, setDataRota] = useState(diaOperacional ?? hojeYmd());
-  const [service, setService] = useState("todos");
+  const [serviceFiltro, setServiceFiltro] = useState("todos");
   const [busca, setBusca] = useState("");
-  const [selecionados, setSelecionados] = useState<string[]>([]);
-  const [rascunhos, setRascunhos] = useState<RascunhoRota[]>([]);
+  const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [motoristaFiltro, setMotoristaFiltro] = useState("");
+  const [placaFiltro, setPlacaFiltro] = useState("");
+  const [expandidaId, setExpandidaId] = useState<string | null>(null);
+  const [fotosDe, setFotosDe] = useState<TransferenciaDetalhe | null>(null);
+  const [novaAberto, setNovaAberto] = useState(false);
   const [editando, setEditando] = useState<TransferenciaDetalhe | null>(null);
-  const [marcoLote, setMarcoLote] = useState<TransferenciaEtapa | null>(null);
 
   const contexto = useQuery({
     queryKey: ["contexto-base-operacional"],
     queryFn: () => contextoFn(),
     staleTime: 60_000,
   });
-
   const isAdmin = contexto.data?.isAdmin === true;
   const serviceBase = serviceDaBase(base?.nome);
 
@@ -171,147 +248,170 @@ function TransferenciasPage() {
         },
       }),
     enabled: !!dataRota && (!!base || isAdmin) && !!contexto.data,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const linhas = useMemo(() => {
     const termo = busca.trim().toLocaleUpperCase("pt-BR");
+    const motoTermo = motoristaFiltro.trim().toLocaleUpperCase("pt-BR");
+    const placaTermo = placaFiltro.trim().toLocaleUpperCase("pt-BR");
     return (lista.data ?? []).filter((t) => {
       if (t.status === "cancelada") return false;
-      if (!serviceBase && service !== "todos" && t.service !== service) return false;
+      if (!serviceBase && serviceFiltro !== "todos" && t.service !== serviceFiltro) return false;
+      if (statusFiltro !== "todos") {
+        const grupo = statusInfo(t.status).label;
+        if (grupo !== statusFiltro) return false;
+      }
+      if (motoTermo && !t.motorista.toLocaleUpperCase("pt-BR").includes(motoTermo)) return false;
+      if (placaTermo && !t.placa.toLocaleUpperCase("pt-BR").includes(placaTermo)) return false;
       if (!termo) return true;
       return [t.motorista, t.placa, t.codigo, t.service, t.base_nome]
         .join(" ")
         .toLocaleUpperCase("pt-BR")
         .includes(termo);
     });
-  }, [lista.data, busca, service, serviceBase]);
+  }, [lista.data, busca, serviceFiltro, serviceBase, statusFiltro, motoristaFiltro, placaFiltro]);
 
   const services = useMemo(
-    () => Array.from(new Set([...SERVICES_OPERACIONAIS, ...(lista.data ?? []).map((t) => t.service)])).sort(),
+    () =>
+      Array.from(
+        new Set([...SERVICES_OPERACIONAIS, ...(lista.data ?? []).map((t) => t.service)]),
+      ).sort(),
     [lista.data],
   );
 
-  const criarMutation = useMutation({
-    mutationFn: async (rascunho: RascunhoRota) => {
-      const resultado = await criarLoteFn({
-        data: {
-          baseId: base!.id,
-          dataOperacional: dataRota,
-          linhas: [{
-            service: serviceBase || rascunho.service,
-            motorista: rascunho.motorista,
-            placa: rascunho.placa.toUpperCase(),
-            tipoVeiculo: rascunho.tipoVeiculo || undefined,
-          }],
-        },
-      });
-      if (!resultado.sucessos) throw new Error(resultado.detalhes[0]?.mensagem ?? "Não foi possível criar a rota.");
-      return resultado;
-    },
-    onSuccess: (_resultado, rascunho) => {
-      setRascunhos((atual) => atual.filter((item) => item.id !== rascunho.id));
-      toast.success("Rota adicionada.");
-      refresh();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao adicionar rota."),
-  });
-
-  const editarMutation = useMutation({
-    mutationFn: (dados: { transferenciaId: string; service: string; motorista: string; placa: string; tipoVeiculo?: string }) => editarFn({ data: dados }),
-    onSuccess: () => { toast.success("Rota atualizada."); setEditando(null); refresh(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao editar rota."),
-  });
-
-  const excluirMutation = useMutation({
-    mutationFn: (transferenciaId: string) => cancelarFn({ data: { transferenciaId, justificativa: "Excluída pela operação na tela de Transferências." } }),
-    onSuccess: () => { toast.success("Rota excluída da operação."); refresh(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao excluir rota."),
-  });
-
-  const concluirMutation = useMutation({
-    mutationFn: (transferencia: TransferenciaDetalhe) => marcoFn({ data: { transferenciaId: transferencia.id, etapa: "saida_xpt", ocorridoEm: new Date().toISOString(), localizacaoTexto: "XPT" } }),
-    onSuccess: () => { toast.success("Transferência concluída."); refresh(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao concluir transferência."),
-  });
+  useTickSeconds(60_000); // para KPIs "em andamento"
 
   const indicadores = useMemo(() => {
-    const agora = dataRota === hojeYmd() ? new Date().toISOString() : undefined;
-    const permanencias = linhas
-      .map((t) => minutosEntre(
-        eventoDe(t, "chegada_service")?.ocorrido_em,
-        eventoDe(t, "saida_service")?.ocorrido_em ?? agora,
-      ))
-      .filter((v): v is number => v != null);
-    const disponibilizadosAte7 = linhas.filter((t) => {
-      const minutos = minutosDoDiaEmSaoPaulo(eventoDe(t, "chegada_service")?.ocorrido_em);
-      return minutos != null && minutos <= 7 * 60;
-    }).length;
-    const aguardandoCarga = linhas.filter(
-      (t) => eventoDe(t, "chegada_service") && !eventoDe(t, "saida_service"),
+    const agoraIso = new Date().toISOString();
+    const emAndamento = linhas.filter(
+      (t) => !["concluida_no_prazo", "concluida_com_atraso", "cancelada"].includes(t.status),
     ).length;
-    const saidasApos9 = linhas.filter((t) => {
-      const minutos = minutosDoDiaEmSaoPaulo(eventoDe(t, "saida_service")?.ocorrido_em);
-      return minutos != null && minutos > 9 * 60;
+    const finalizadasHoje = linhas.filter((t) =>
+      ["concluida_no_prazo", "concluida_com_atraso"].includes(t.status),
+    ).length;
+    const esperas = linhas
+      .map((t) => {
+        const chegada = eventoDe(t, "chegada_service")?.ocorrido_em;
+        const saida = eventoDe(t, "saida_service")?.ocorrido_em;
+        if (!chegada) return null;
+        return minutosEntre(chegada, saida ?? agoraIso);
+      })
+      .filter((v): v is number => v != null);
+    const media = esperas.length
+      ? Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length)
+      : 0;
+    const maior = esperas.length ? Math.max(...esperas) : 0;
+    const atrasadas = linhas.filter((t) => {
+      const chegada = eventoDe(t, "chegada_service")?.ocorrido_em;
+      const saida = eventoDe(t, "saida_service")?.ocorrido_em;
+      if (!chegada || saida) return false;
+      const min = minutosEntre(chegada, agoraIso);
+      return min != null && min > 60;
     }).length;
-    return {
-      total: linhas.length,
-      disponibilizadosAte7,
-      aguardandoCarga,
-      saidasApos9,
-      mediaService: permanencias.length
-        ? Math.round(permanencias.reduce((a, b) => a + b, 0) / permanencias.length)
-        : 0,
-      maiorEspera: permanencias.length ? Math.max(...permanencias) : 0,
-    };
-  }, [linhas, dataRota]);
+    const veiculos = new Set(linhas.map((t) => t.placa)).size;
+    return { emAndamento, finalizadasHoje, media, maior, atrasadas, veiculos };
+  }, [linhas]);
 
   function refresh() {
     void qc.invalidateQueries({ queryKey: ["transferencias-painel"] });
-    void qc.invalidateQueries({ queryKey: ["transferencias"] });
   }
 
-  function selecionarTodos() {
-    setSelecionados((atual) => (atual.length === linhas.length ? [] : linhas.map((t) => t.id)));
-  }
+  const criarMutation = useMutation({
+    mutationFn: (dados: { motorista: string; placa: string; tipoVeiculo?: string; service: string }) =>
+      criarLoteFn({
+        data: {
+          baseId: base!.id,
+          dataOperacional: dataRota,
+          linhas: [
+            {
+              service: serviceBase || dados.service,
+              motorista: dados.motorista,
+              placa: dados.placa.toUpperCase(),
+              tipoVeiculo: dados.tipoVeiculo || undefined,
+            },
+          ],
+        },
+      }),
+    onSuccess: (resultado) => {
+      if (!resultado.sucessos) {
+        toast.error(resultado.detalhes[0]?.mensagem ?? "Não foi possível criar a transferência.");
+        return;
+      }
+      toast.success("Transferência criada.");
+      setNovaAberto(false);
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao criar transferência."),
+  });
+
+  const excluirMutation = useMutation({
+    mutationFn: (transferenciaId: string) =>
+      cancelarFn({
+        data: {
+          transferenciaId,
+          justificativa: "Excluída pela operação na tela de Transferências.",
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Transferência excluída.");
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao excluir."),
+  });
+
+  const concluirMutation = useMutation({
+    mutationFn: (t: TransferenciaDetalhe) =>
+      marcoFn({
+        data: {
+          transferenciaId: t.id,
+          etapa: "saida_xpt",
+          ocorridoEm: new Date().toISOString(),
+          localizacaoTexto: "XPT",
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Transferência concluída.");
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao concluir."),
+  });
+
+  const statusOpcoes = useMemo(() => {
+    const set = new Set<string>();
+    (lista.data ?? []).forEach((t) => set.add(statusInfo(t.status).label));
+    return Array.from(set).sort();
+  }, [lista.data]);
 
   return (
-    <div className="p-3 md:p-6 max-w-[1700px] mx-auto space-y-5">
-      <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div>
+    <div className="p-3 md:p-6 max-w-[1500px] mx-auto space-y-5">
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="font-display text-2xl md:text-3xl font-bold flex items-center gap-2">
-            <Truck className="w-8 h-8 text-primary" /> Transferências
+            <Truck className="w-7 h-7 text-primary shrink-0" /> Transferências
           </h1>
           <p className="text-sm text-muted-foreground">
-            Comprove quando o veículo foi disponibilizado e quanto tempo aguardou a carga no Service.
+            Chegada, carregamento, deslocamento e conclusão de cada transferência entre o Service e o XPT.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {selecionados.length > 0 && (
-            <>
-              <Button variant="outline" onClick={() => setMarcoLote("chegada_service")}>
-                Registrar chegada ({selecionados.length})
-              </Button>
-              <Button variant="outline" onClick={() => setMarcoLote("saida_service")}>
-                Registrar saída ({selecionados.length})
-              </Button>
-              <Button variant="outline" onClick={() => setMarcoLote("chegada_xpt")}>
-                Registrar chegada XPT ({selecionados.length})
-              </Button>
-              <Button variant="outline" onClick={() => setMarcoLote("saida_xpt")}>
-                Registrar saída XPT ({selecionados.length})
-              </Button>
-            </>
-          )}
-          <Button variant="outline" onClick={() => refresh()} disabled={lista.isFetching}>
-            <RefreshCcw className={`w-4 h-4 mr-2 ${lista.isFetching ? "animate-spin" : ""}`} /> Atualizar
+          <Button
+            variant="outline"
+            onClick={() => refresh()}
+            disabled={lista.isFetching}
+            title="Atualizar"
+          >
+            <RefreshCcw className={`w-4 h-4 mr-2 ${lista.isFetching ? "animate-spin" : ""}`} />
+            Atualizar
           </Button>
-          <Button onClick={() => setRascunhos((atual) => [...atual, novoRascunho(serviceBase || (service === "todos" ? services[0] : service))])} disabled={!base?.id}>
-            <Plus className="w-4 h-4 mr-2" /> Nova rota
+          <Button onClick={() => setNovaAberto(true)} disabled={!base?.id}>
+            <Plus className="w-4 h-4 mr-2" /> Nova Transferência
           </Button>
         </div>
       </header>
 
+      {/* Filtros */}
       <Card className="p-4">
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
           <div>
@@ -319,326 +419,1109 @@ function TransferenciasPage() {
             <Input value={base?.nome ?? (isAdmin ? "Todas as bases" : "—")} disabled />
           </div>
           <div>
-            <Label>Service (origem)</Label>
+            <Label>Service</Label>
             {serviceBase ? (
               <Input value={serviceBase} disabled className="font-semibold" />
             ) : (
-              <Select value={service} onValueChange={setService}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={serviceFiltro} onValueChange={setServiceFiltro}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os Services</SelectItem>
-                  {services.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                  {services.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             )}
           </div>
           <div>
-            <Label>Data da rota</Label>
+            <Label>Data</Label>
             <Input type="date" value={dataRota} onChange={(e) => setDataRota(e.target.value)} />
           </div>
           <div>
-            <Label>Buscar veículo</Label>
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Motorista, placa ou código" />
+            <Label>Buscar</Label>
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Motorista, placa ou código"
+            />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {statusOpcoes.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Motorista</Label>
+            <Input
+              value={motoristaFiltro}
+              onChange={(e) => setMotoristaFiltro(e.target.value)}
+              placeholder="Nome"
+            />
+          </div>
+          <div>
+            <Label>Placa</Label>
+            <Input
+              value={placaFiltro}
+              onChange={(e) => setPlacaFiltro(e.target.value.toUpperCase())}
+              placeholder="ABC1D23"
+            />
           </div>
         </div>
       </Card>
 
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi titulo="Total de veículos" valor={indicadores.total} icone={Truck} />
-        <Kpi titulo="Disponibilizados até 07h" valor={indicadores.disponibilizadosAte7} subtitulo={percentual(indicadores.disponibilizadosAte7, indicadores.total)} icone={CheckCircle2} tom="success" />
-        <Kpi titulo="Aguardando carga" valor={indicadores.aguardandoCarga} icone={Clock3} tom="warning" />
-        <Kpi titulo="Saídas após 09h (MELI)" valor={indicadores.saidasApos9} subtitulo={percentual(indicadores.saidasApos9, indicadores.total)} icone={AlertTriangle} tom="danger" />
-        <Kpi titulo="Média aguardando carga" valor={duracao(indicadores.mediaService)} icone={Clock3} />
-        <Kpi titulo="Maior espera por carga" valor={duracao(indicadores.maiorEspera)} icone={AlertTriangle} tom="danger" />
+        <Kpi titulo="Em andamento" valor={indicadores.emAndamento} icone={Truck} />
+        <Kpi titulo="Finalizadas hoje" valor={indicadores.finalizadasHoje} icone={CheckCircle2} tom="success" />
+        <Kpi titulo="Tempo médio aguardando" valor={duracao(indicadores.media)} icone={Clock3} />
+        <Kpi titulo="Maior tempo aguardando" valor={duracao(indicadores.maior)} icone={AlertTriangle} tom="warning" />
+        <Kpi titulo="Atrasadas (>60min)" valor={indicadores.atrasadas} icone={AlertTriangle} tom="danger" />
+        <Kpi titulo="Total de veículos" valor={indicadores.veiculos} icone={Truck} />
       </div>
 
+      {/* Tabela */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[2600px] text-sm">
+          <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
-              <tr>
-                <th className="p-3 text-center w-12">
-                  <input type="checkbox" checked={linhas.length > 0 && selecionados.length === linhas.length} onChange={selecionarTodos} />
-                </th>
-                <th className="p-3 text-left">Motorista</th>
-                <th className="p-3 text-left">Placa</th>
-                <th className="p-3 text-left">Service</th>
-                <th className="p-3 text-center" colSpan={2}>Chegada Service</th>
-                <th className="p-3 text-center" colSpan={2}>Saída Service</th>
-                <th className="p-3 text-center">Tempo aguardando carga</th>
-                <th className="p-3 text-center">Situação no Service</th>
-                <th className="p-3 text-center" colSpan={2}>Chegada XPT</th>
-                <th className="p-3 text-center" colSpan={2}>Saída XPT</th>
-                <th className="p-3 text-center">Deslocamento</th>
-                <th className="p-3 text-center">Ações</th>
-              </tr>
-              <tr className="text-xs text-muted-foreground border-t">
-                <th />
-                <th />
-                <th />
-                <th />
-                <th className="p-2">Horário</th>
-                <th className="p-2">Evidência</th>
-                <th className="p-2">Horário</th>
-                <th className="p-2">TimeMark</th>
-                <th />
-                <th />
-                <th className="p-2">Horário</th>
-                <th className="p-2">Evidência</th>
-                <th className="p-2">Horário</th>
-                <th className="p-2">Evidência</th>
-                <th /><th />
+              <tr className="text-left">
+                <th className="p-3 w-8" />
+                <th className="p-3">Motorista</th>
+                <th className="p-3">Placa</th>
+                <th className="p-3 hidden md:table-cell">Service</th>
+                <th className="p-3 text-center">Rotas</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3 text-center">Aguardando carga</th>
+                <th className="p-3 text-center w-16">Fotos</th>
+                <th className="p-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {rascunhos.map((rascunho) => (
-                <RascunhoRotaRow
-                  key={rascunho.id}
-                  rascunho={rascunho}
-                  serviceFixo={serviceBase}
-                  services={services}
-                  salvando={criarMutation.isPending}
-                  onChange={(novo) => setRascunhos((atual) => atual.map((item) => item.id === novo.id ? novo : item))}
-                  onExcluir={() => setRascunhos((atual) => atual.filter((item) => item.id !== rascunho.id))}
-                  onSalvar={() => criarMutation.mutate(rascunho)}
-                />
-              ))}
               {linhas.map((t) => {
-                const chegadaService = eventoDe(t, "chegada_service");
-                const saidaService = eventoDe(t, "saida_service");
-                const chegadaXpt = eventoDe(t, "chegada_xpt");
-                const saidaXpt = eventoDe(t, "saida_xpt");
-                const permanencia = minutosEntre(
-                  chegadaService?.ocorrido_em,
-                  saidaService?.ocorrido_em ?? (dataRota === hojeYmd() ? new Date().toISOString() : undefined),
-                );
-                const deslocamento = minutosEntre(saidaService?.ocorrido_em, chegadaXpt?.ocorrido_em);
-                const situacao = classificarService(chegadaService?.ocorrido_em, saidaService?.ocorrido_em);
-                const evidChegada = t.evidencias.find((e) => e.etapa === "chegada_service");
-                const evidSaida = t.evidencias.find((e) => e.etapa === "saida_service");
-                const evidXpt = t.evidencias.find((e) => e.etapa === "chegada_xpt");
-                const evidSaidaXpt = t.evidencias.find((e) => e.etapa === "saida_xpt");
-                const proxima = proximaEtapa(t.eventos);
+                const expandida = expandidaId === t.id;
+                const obs = parseObs(t.observacao);
+                const totalFotos = t.evidencias.filter((e) => e.storage_path).length;
                 return (
                   <Fragment key={t.id}>
-                  <tr className="border-b last:border-0 hover:bg-muted/20">
-                    <td className="p-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selecionados.includes(t.id)}
-                        onChange={() => setSelecionados((atual) => atual.includes(t.id) ? atual.filter((id) => id !== t.id) : [...atual, t.id])}
-                      />
-                    </td>
-                    <td className="p-3"><b>{t.motorista}</b><div className="text-xs text-muted-foreground">{t.codigo}</div></td>
-                    <td className="p-3 font-mono">{t.placa}</td>
-                    <td className="p-3 font-semibold">{t.service}</td>
-                    <EtapaFormCells transferencia={t} etapa="chegada_service" evento={chegadaService} evidencia={evidChegada} ativo={proxima === "chegada_service"} registrarFn={marcoFn} corrigirFn={corrigirMarcoFn} onSuccess={refresh} />
-                    <EtapaFormCells transferencia={t} etapa="saida_service" evento={saidaService} evidencia={evidSaida} ativo={proxima === "saida_service"} registrarFn={marcoFn} corrigirFn={corrigirMarcoFn} onSuccess={refresh} />
-                    <td className={`p-3 text-center font-semibold ${situacao.cor}`}>{permanencia != null ? duracao(permanencia) : chegadaService ? "Em aberto" : "—"}</td>
-                    <td className="p-3 text-center"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${situacao.badge}`}>{situacao.label}</span></td>
-                    <EtapaFormCells transferencia={t} etapa="chegada_xpt" evento={chegadaXpt} evidencia={evidXpt} ativo={proxima === "chegada_xpt"} registrarFn={marcoFn} corrigirFn={corrigirMarcoFn} onSuccess={refresh} />
-                    <EtapaFormCells transferencia={t} etapa="saida_xpt" evento={saidaXpt} evidencia={evidSaidaXpt} ativo={proxima === "saida_xpt"} registrarFn={marcoFn} corrigirFn={corrigirMarcoFn} onSuccess={refresh} />
-                    <td className="p-3 text-center font-semibold text-muted-foreground">{duracao(deslocamento)}</td>
-                    <td className="p-3 text-center"><div className="flex justify-center gap-1">
-                      <Button variant="ghost" size="icon" title="Editar rota" onClick={() => setEditando(t)}><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" title="Excluir rota" className="text-destructive" disabled={excluirMutation.isPending} onClick={() => excluirMutation.mutate(t.id)}><Trash2 className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" title={proxima === "saida_xpt" ? "Concluir transferência" : saidaXpt ? "Transferência concluída" : "Disponível após a chegada no XPT"} className="text-emerald-600" disabled={proxima !== "saida_xpt" || concluirMutation.isPending} onClick={() => concluirMutation.mutate(t)}><Check className="w-4 h-4" /></Button>
-                    </div></td>
-                  </tr>
-                  {editando?.id === t.id && (
-                    <EditarRotaRow
-                      transferencia={editando}
-                      serviceFixo={serviceBase}
-                      services={services}
-                      salvando={editarMutation.isPending}
-                      onChange={setEditando}
-                      onCancelar={() => setEditando(null)}
-                      onSalvar={() => editarMutation.mutate({ transferenciaId: editando.id, service: serviceBase || editando.service, motorista: editando.motorista, placa: editando.placa, tipoVeiculo: editando.tipo_veiculo || undefined })}
-                    />
-                  )}
+                    <tr
+                      className={`border-b last:border-0 hover:bg-muted/20 cursor-pointer ${
+                        expandida ? "bg-muted/30" : ""
+                      }`}
+                      onClick={() => setExpandidaId(expandida ? null : t.id)}
+                    >
+                      <td className="p-3">
+                        {expandida ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4" />
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <b>{t.motorista}</b>
+                        <div className="text-xs text-muted-foreground">{t.codigo}</div>
+                      </td>
+                      <td className="p-3 font-mono">{t.placa}</td>
+                      <td className="p-3 font-semibold hidden md:table-cell">{t.service}</td>
+                      <td className="p-3 text-center">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="font-semibold">{obs.rotas.length}</span>
+                          <span className="text-xs text-muted-foreground">rota{obs.rotas.length === 1 ? "" : "s"}</span>
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <StatusBadge status={t.status} />
+                      </td>
+                      <td className="p-3 text-center font-semibold">
+                        <TempoAguardandoCarga t={t} />
+                      </td>
+                      <td className="p-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={`Ver fotos (${totalFotos})`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFotosDe(t);
+                          }}
+                        >
+                          <Camera className="w-4 h-4" />
+                          {totalFotos > 0 && (
+                            <span className="ml-1 text-[10px] font-semibold">{totalFotos}</span>
+                          )}
+                        </Button>
+                      </td>
+                      <td className="p-3 text-right">
+                        <div
+                          className="flex justify-end gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Editar"
+                            onClick={() => setEditando(t)}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title={
+                              proximaEtapa(t.eventos) === "saida_xpt"
+                                ? "Concluir transferência"
+                                : "Concluir disponível somente após chegada no XPT"
+                            }
+                            className="text-emerald-600"
+                            disabled={
+                              proximaEtapa(t.eventos) !== "saida_xpt" ||
+                              concluirMutation.isPending
+                            }
+                            onClick={() => concluirMutation.mutate(t)}
+                          >
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Excluir (admin)"
+                              className="text-destructive"
+                              disabled={excluirMutation.isPending}
+                              onClick={() => {
+                                if (confirm("Excluir esta transferência da operação?")) {
+                                  excluirMutation.mutate(t.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandida && (
+                      <tr className="border-b bg-muted/10">
+                        <td colSpan={9} className="p-4">
+                          <LinhaExpandida
+                            transferencia={t}
+                            editarFn={editarFn}
+                            marcoFn={marcoFn}
+                            corrigirMarcoFn={corrigirMarcoFn}
+                            onSalvo={refresh}
+                          />
+                        </td>
+                      </tr>
+                    )}
                   </Fragment>
                 );
               })}
-              {!lista.isLoading && linhas.length === 0 && rascunhos.length === 0 && (
-                <tr><td colSpan={16} className="p-12 text-center text-muted-foreground">Nenhum veículo encontrado para os filtros selecionados.</td></tr>
+              {!lista.isLoading && linhas.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="p-12 text-center text-muted-foreground">
+                    Nenhuma transferência encontrada para os filtros selecionados.
+                  </td>
+                </tr>
               )}
               {lista.isLoading && (
-                <tr><td colSpan={16} className="p-12 text-center text-muted-foreground">Carregando transferências…</td></tr>
+                <tr>
+                  <td colSpan={9} className="p-12 text-center text-muted-foreground">
+                    Carregando transferências…
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t flex flex-wrap gap-6 text-xs text-muted-foreground">
-          <Legenda classe="bg-emerald-500" texto="Veículo liberado pelo Service até 09h" />
-          <Legenda classe="bg-amber-500" texto="Veículo no Service aguardando carga" />
-          <Legenda classe="bg-red-500" texto="Saída após 09h: atraso de carregamento/liberação MELI" />
-          <Legenda classe="bg-slate-400" texto="Chegada ao Service ainda não registrada" />
-        </div>
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <h2 className="font-semibold mb-3">Resumo da operação</h2>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <Resumo label="Data da rota" valor={new Date(`${dataRota}T00:00:00`).toLocaleDateString("pt-BR")} />
-            <Resumo label="Base" valor={base?.nome ?? "Todas as bases"} />
-            <Resumo label="Veículos" valor={String(linhas.length)} />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h2 className="font-semibold mb-3">Observações gerais</h2>
-          <p className="text-sm text-muted-foreground">O foco é documentar a disponibilização antecipada da frota JM e a espera pela carga. O deslocamento até o XPT continua registrado como dado complementar.</p>
-        </Card>
-      </div>
-
-      <MarcoLoteDialog
-        etapa={marcoLote}
-        onOpenChange={(open) => !open && setMarcoLote(null)}
-        ids={selecionados}
-        registrarFn={marcoLoteFn}
-        onSuccess={() => { setSelecionados([]); refresh(); }}
+      <NovaTransferenciaDialog
+        aberto={novaAberto}
+        onFechar={() => setNovaAberto(false)}
+        serviceFixo={serviceBase}
+        services={services}
+        salvando={criarMutation.isPending}
+        onSalvar={(dados) => criarMutation.mutate(dados)}
       />
+
+      <EditarTransferenciaDialog
+        transferencia={editando}
+        onFechar={() => setEditando(null)}
+        serviceFixo={serviceBase}
+        services={services}
+        editarFn={editarFn}
+        onSalvo={refresh}
+      />
+
+      <FotosDialog transferencia={fotosDe} onFechar={() => setFotosDe(null)} />
     </div>
   );
 }
 
-function percentual(valor: number, total: number) {
-  return total ? `${Math.round((valor / total) * 100)}%` : "0%";
+// ============================================================
+// Linha expandida (rotas + timeline + próxima etapa)
+// ============================================================
+function LinhaExpandida({
+  transferencia,
+  editarFn,
+  marcoFn,
+  corrigirMarcoFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  editarFn: ReturnType<typeof useServerFn<typeof editarTransferencia>>;
+  marcoFn: ReturnType<typeof useServerFn<typeof registrarMarcoTransferencia>>;
+  corrigirMarcoFn: ReturnType<typeof useServerFn<typeof corrigirMarcoTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const proxima = proximaEtapa(transferencia.eventos);
+  return (
+    <div className="grid lg:grid-cols-2 gap-4">
+      <div className="space-y-4">
+        <RotasManager transferencia={transferencia} editarFn={editarFn} onSalvo={onSalvo} />
+        <TimelineHistorico transferencia={transferencia} />
+      </div>
+      <div className="space-y-4">
+        <ProximaEtapaForm
+          transferencia={transferencia}
+          etapa={proxima}
+          marcoFn={marcoFn}
+          corrigirMarcoFn={corrigirMarcoFn}
+          onSalvo={onSalvo}
+        />
+        <NotasEditor transferencia={transferencia} editarFn={editarFn} onSalvo={onSalvo} />
+      </div>
+    </div>
+  );
 }
 
-function classificarService(chegadaIso?: string, saidaIso?: string) {
-  if (!chegadaIso) return { label: "Aguardando chegada", cor: "text-muted-foreground", badge: "bg-muted text-muted-foreground" };
-  if (!saidaIso) return { label: "Aguardando carga MELI", cor: "text-amber-600", badge: "bg-amber-100 text-amber-700" };
-  const saida = minutosDoDiaEmSaoPaulo(saidaIso);
-  if (saida != null && saida <= 9 * 60) return { label: "Liberado até 09h", cor: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700" };
-  return { label: "Saída tardia · MELI", cor: "text-red-600", badge: "bg-red-100 text-red-700" };
-}
+// ============================================================
+// Rotas Manager
+// ============================================================
+function RotasManager({
+  transferencia,
+  editarFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  editarFn: ReturnType<typeof useServerFn<typeof editarTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const inicial = parseObs(transferencia.observacao);
+  const [rotas, setRotas] = useState<Rota[]>(inicial.rotas);
+  const [codigo, setCodigo] = useState("");
+  const [obs, setObs] = useState("");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
-function EvidenceLink({ evidencia }: { evidencia?: TransferenciaDetalhe["evidencias"][number] }) {
-  const url = evidencia?.signed_url ?? evidencia?.timemark_url;
-  if (!url) return <span className="text-muted-foreground">—</span>;
-  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">Ver <ExternalLink className="w-3 h-3" /></a>;
-}
+  useEffect(() => {
+    setRotas(parseObs(transferencia.observacao).rotas);
+  }, [transferencia.observacao]);
 
-function Kpi({ titulo, valor, subtitulo, icone: Icon, tom = "default" }: { titulo: string; valor: string | number; subtitulo?: string; icone: typeof Truck; tom?: "default" | "success" | "warning" | "danger" }) {
-  const caixa = tom === "success" ? "bg-emerald-50 text-emerald-600" : tom === "warning" ? "bg-amber-50 text-amber-600" : tom === "danger" ? "bg-red-50 text-red-600" : "bg-primary/10 text-primary";
-  return <Card className="p-4"><div className="flex items-center gap-3"><div className={`p-2 rounded-lg ${caixa}`}><Icon className="w-5 h-5" /></div><div><div className="text-2xl font-bold">{valor}</div><div className="text-xs text-muted-foreground">{titulo}</div></div>{subtitulo && <b className="ml-auto text-xs">{subtitulo}</b>}</div></Card>;
-}
-
-function Legenda({ classe, texto }: { classe: string; texto: string }) {
-  return <span className="flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${classe}`} />{texto}</span>;
-}
-
-function Resumo({ label, valor }: { label: string; valor: string }) {
-  return <div><div className="text-xs text-muted-foreground">{label}</div><b>{valor}</b></div>;
-}
-
-function ServiceField({ value, serviceFixo, services, onChange }: { value: string; serviceFixo: string; services: string[]; onChange: (value: string) => void }) {
-  if (serviceFixo) return <Input value={serviceFixo} disabled className="font-semibold" />;
-  return <Select value={value} onValueChange={onChange}><SelectTrigger><SelectValue placeholder="Service" /></SelectTrigger><SelectContent>{services.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>;
-}
-
-function RascunhoRotaRow({ rascunho, serviceFixo, services, salvando, onChange, onExcluir, onSalvar }: { rascunho: RascunhoRota; serviceFixo: string; services: string[]; salvando: boolean; onChange: (value: RascunhoRota) => void; onExcluir: () => void; onSalvar: () => void }) {
-  const valido = (serviceFixo || rascunho.service).length >= 2 && rascunho.motorista.trim().length >= 2 && rascunho.placa.trim().length >= 5;
-  return <tr className="border-b bg-primary/5"><td colSpan={16} className="p-3"><div className="grid gap-3 md:grid-cols-[1fr_1.4fr_1fr_1fr_auto] items-end"><div><Label>Service</Label><ServiceField value={rascunho.service} serviceFixo={serviceFixo} services={services} onChange={(value) => onChange({ ...rascunho, service: value })} /></div><div><Label>Motorista</Label><Input value={rascunho.motorista} onChange={(e) => onChange({ ...rascunho, motorista: e.target.value })} placeholder="Nome do motorista" /></div><div><Label>Placa</Label><Input value={rascunho.placa} onChange={(e) => onChange({ ...rascunho, placa: e.target.value.toUpperCase() })} placeholder="ABC1D23" /></div><div><Label>Tipo de veículo</Label><Input value={rascunho.tipoVeiculo ?? ""} onChange={(e) => onChange({ ...rascunho, tipoVeiculo: e.target.value })} placeholder="Truck, Van…" /></div><div className="flex gap-1"><Button size="icon" title="Salvar rota" disabled={!valido || salvando} onClick={onSalvar}><Save className="w-4 h-4" /></Button><Button variant="ghost" size="icon" title="Excluir linha" className="text-destructive" onClick={onExcluir}><Trash2 className="w-4 h-4" /></Button></div></div></td></tr>;
-}
-
-function EditarRotaRow({ transferencia, serviceFixo, services, salvando, onChange, onCancelar, onSalvar }: { transferencia: TransferenciaDetalhe; serviceFixo: string; services: string[]; salvando: boolean; onChange: (value: TransferenciaDetalhe) => void; onCancelar: () => void; onSalvar: () => void }) {
-  const valido = (serviceFixo || transferencia.service).length >= 2 && transferencia.motorista.trim().length >= 2 && transferencia.placa.trim().length >= 5;
-  return <tr className="border-b bg-amber-50/60"><td colSpan={16} className="p-3"><div className="grid gap-3 md:grid-cols-[1fr_1.4fr_1fr_1fr_auto] items-end"><div><Label>Service</Label><ServiceField value={transferencia.service} serviceFixo={serviceFixo} services={services} onChange={(value) => onChange({ ...transferencia, service: value })} /></div><div><Label>Motorista</Label><Input value={transferencia.motorista} onChange={(e) => onChange({ ...transferencia, motorista: e.target.value })} /></div><div><Label>Placa</Label><Input value={transferencia.placa} onChange={(e) => onChange({ ...transferencia, placa: e.target.value.toUpperCase() })} /></div><div><Label>Tipo de veículo</Label><Input value={transferencia.tipo_veiculo ?? ""} onChange={(e) => onChange({ ...transferencia, tipo_veiculo: e.target.value })} /></div><div className="flex gap-1"><Button size="icon" title="Salvar alterações" disabled={!valido || salvando} onClick={onSalvar}><Save className="w-4 h-4" /></Button><Button variant="ghost" size="icon" title="Cancelar edição" onClick={onCancelar}><X className="w-4 h-4" /></Button></div></div></td></tr>;
-}
-
-function MarcoLoteDialog({ etapa, onOpenChange, ids, registrarFn, onSuccess }: { etapa: TransferenciaEtapa | null; onOpenChange: (open: boolean) => void; ids: string[]; registrarFn: ReturnType<typeof useServerFn<typeof registrarMarcosTransferenciaLote>>; onSuccess: () => void }) {
-  const [horario, setHorario] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); });
-  const [localizacao, setLocalizacao] = useState("");
   const mutation = useMutation({
-    mutationFn: () => registrarFn({ data: { transferenciaIds: ids, etapa: etapa!, ocorridoEm: new Date(horario).toISOString(), localizacaoTexto: localizacao, responsabilidade: etapa === "saida_service" && new Date(horario).getHours() >= 9 ? "MELI" : undefined, motivoCodigo: etapa === "saida_service" && new Date(horario).getHours() >= 9 ? "ATRASO_CARREGAMENTO" : undefined } }),
-    onSuccess: (resultado) => { toast.success(`${resultado.sucessos} marco(s) registrado(s).`); if (resultado.falhas) toast.warning(`${resultado.falhas} registro(s) falharam.`); onOpenChange(false); onSuccess(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao registrar marcos."),
-  });
-  const titulo = etapa === "chegada_service"
-    ? "Chegada no Service em lote"
-    : etapa === "saida_service"
-      ? "Saída do Service em lote"
-      : etapa === "chegada_xpt"
-        ? "Chegada no XPT em lote"
-        : "Saída do XPT em lote";
-  return <Dialog open={!!etapa} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>{titulo}</DialogTitle><DialogDescription>O mesmo horário será aplicado aos {ids.length} veículos selecionados. As evidências poderão ser anexadas depois.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label>Data e horário reais</Label><Input type="datetime-local" value={horario} onChange={(e) => setHorario(e.target.value)} /></div><div><Label>Localização</Label><Input value={localizacao} onChange={(e) => setLocalizacao(e.target.value)} placeholder="Ex.: SP17" /></div>{etapa === "saida_service" && new Date(horario).getHours() >= 9 && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">Saída após 09:00: responsabilidade atribuída automaticamente ao Mercado Livre por atraso no carregamento/liberação.</div>}</div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button disabled={!localizacao.trim() || !ids.length || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? "Registrando…" : "Registrar em lote"}</Button></DialogFooter></DialogContent></Dialog>;
-}
-
-function EtapaFormCells({ transferencia, etapa, evento, evidencia, ativo, registrarFn, corrigirFn, onSuccess }: { transferencia: TransferenciaDetalhe; etapa: TransferenciaEtapa; evento?: TransferenciaDetalhe["eventos"][number]; evidencia?: TransferenciaDetalhe["evidencias"][number]; ativo: boolean; registrarFn: ReturnType<typeof useServerFn<typeof registrarMarcoTransferencia>>; corrigirFn: ReturnType<typeof useServerFn<typeof corrigirMarcoTransferencia>>; onSuccess: () => void }) {
-  const [horario, setHorario] = useState(() => dataHoraLocal(evento?.ocorrido_em));
-  const [localizacao, setLocalizacao] = useState(evento?.localizacao_texto ?? "");
-  const [foto, setFoto] = useState<File | null>(null);
-  const [timemark, setTimemark] = useState(evidencia?.timemark_url ?? "");
-  const [fotoKey, setFotoKey] = useState(0);
-  const [editandoEtapa, setEditandoEtapa] = useState(false);
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!ativo || evento) throw new Error("Esta etapa ainda não está disponível.");
-      let storagePath: string | undefined;
-      if (foto) {
-        if (foto.size > 10 * 1024 * 1024) throw new Error("A foto deve ter no máximo 10 MB.");
-        storagePath = caminhoEvidenciaTransferencia(transferencia.base_id, transferencia.id, etapa, foto.name);
-        const { error } = await supabase.storage.from("transferencias-evidencias").upload(storagePath, foto, { upsert: false, contentType: foto.type });
-        if (error) throw new Error(error.message);
-      }
-      try {
-        return await registrarFn({ data: { transferenciaId: transferencia.id, etapa, ocorridoEm: new Date(horario).toISOString(), storagePath, timemarkUrl: timemark || undefined, horarioEvidencia: foto || timemark ? new Date(horario).toISOString() : undefined, localizacaoTexto: localizacao || undefined } });
-      } catch (error) {
-        if (storagePath) await supabase.storage.from("transferencias-evidencias").remove([storagePath]);
-        throw error;
-      }
+    mutationFn: (novaLista: Rota[]) => {
+      const payload = serializeObs({ rotas: novaLista, notas: inicial.notas });
+      return editarFn({
+        data: {
+          transferenciaId: transferencia.id,
+          service: transferencia.service,
+          motorista: transferencia.motorista,
+          placa: transferencia.placa,
+          tipoVeiculo: transferencia.tipo_veiculo ?? undefined,
+          observacao: payload,
+        },
+      });
     },
-    onSuccess: () => { toast.success("Etapa registrada."); setFoto(null); setFotoKey((key) => key + 1); setTimemark(""); onSuccess(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao registrar etapa."),
+    onSuccess: () => {
+      toast.success("Rotas salvas.");
+      setCodigo("");
+      setObs("");
+      setEditandoId(null);
+      onSalvo();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar rotas."),
   });
-  const corrigirMutation = useMutation({
+
+  function adicionar() {
+    const c = codigo.trim();
+    if (!c) return;
+    const nova: Rota = { id: crypto.randomUUID(), codigo: c, obs: obs.trim() };
+    const lista = [...rotas, nova];
+    setRotas(lista);
+    mutation.mutate(lista);
+  }
+  function salvarEdicao(id: string) {
+    const c = codigo.trim();
+    if (!c) return;
+    const lista = rotas.map((r) => (r.id === id ? { ...r, codigo: c, obs: obs.trim() } : r));
+    setRotas(lista);
+    mutation.mutate(lista);
+  }
+  function excluir(id: string) {
+    const lista = rotas.filter((r) => r.id !== id);
+    setRotas(lista);
+    mutation.mutate(lista);
+  }
+  function iniciarEdicao(r: Rota) {
+    setEditandoId(r.id);
+    setCodigo(r.codigo);
+    setObs(r.obs);
+  }
+  function cancelarEdicao() {
+    setEditandoId(null);
+    setCodigo("");
+    setObs("");
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm">Rotas ({rotas.length})</h3>
+      </div>
+      <div className="space-y-2">
+        {rotas.length === 0 && (
+          <p className="text-xs text-muted-foreground">Nenhuma rota cadastrada.</p>
+        )}
+        {rotas.map((r) => (
+          <div
+            key={r.id}
+            className="flex items-center gap-2 rounded-md border bg-background p-2 text-sm"
+          >
+            <div className="flex-1 min-w-0">
+              <div className="font-mono font-semibold truncate">{r.codigo}</div>
+              {r.obs && <div className="text-xs text-muted-foreground truncate">{r.obs}</div>}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              title="Editar rota"
+              onClick={() => iniciarEdicao(r)}
+              disabled={mutation.isPending}
+            >
+              <Pencil className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive"
+              title="Excluir rota"
+              onClick={() => excluir(r.id)}
+              disabled={mutation.isPending}
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-[1fr_1.4fr_auto] gap-2 items-end">
+        <div>
+          <Label className="text-xs">Código</Label>
+          <Input
+            className="h-8 text-xs"
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            placeholder="Ex.: R-123"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Observação</Label>
+          <Input
+            className="h-8 text-xs"
+            value={obs}
+            onChange={(e) => setObs(e.target.value)}
+            placeholder="Opcional"
+          />
+        </div>
+        {editandoId ? (
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={!codigo.trim() || mutation.isPending}
+              onClick={() => salvarEdicao(editandoId)}
+            >
+              <Save className="w-3 h-3 mr-1" /> Salvar
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelarEdicao}>
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            className="h-8"
+            disabled={!codigo.trim() || mutation.isPending}
+            onClick={adicionar}
+          >
+            <Plus className="w-3 h-3 mr-1" /> Adicionar rota
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ============================================================
+// Timeline histórico
+// ============================================================
+function TimelineHistorico({ transferencia }: { transferencia: TransferenciaDetalhe }) {
+  return (
+    <Card className="p-4">
+      <h3 className="font-semibold text-sm mb-3">Histórico</h3>
+      <ol className="relative border-l ml-2 space-y-3">
+        {TRANSFERENCIA_ETAPAS.map((etapa) => {
+          const ev = eventoDe(transferencia, etapa.value);
+          const ocorrencia = transferencia.ocorrencias.find((o) => o.etapa === etapa.value);
+          return (
+            <li key={etapa.value} className="ml-4">
+              <span
+                className={`absolute -left-[6px] w-3 h-3 rounded-full border-2 border-background ${
+                  ev ? "bg-primary" : "bg-muted"
+                }`}
+              />
+              <div className="flex items-baseline justify-between gap-2">
+                <b className="text-sm">{etapa.label}</b>
+                <span className="text-xs text-muted-foreground">
+                  {ev
+                    ? new Date(ev.ocorrido_em).toLocaleString("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })
+                    : "Pendente"}
+                </span>
+              </div>
+              {ev?.localizacao_texto && (
+                <div className="text-xs text-muted-foreground">📍 {ev.localizacao_texto}</div>
+              )}
+              {ev && ev.minutos_atraso > 0 && (
+                <div className="text-xs text-amber-600">
+                  Atraso: {duracao(ev.minutos_atraso)}
+                </div>
+              )}
+              {ocorrencia?.observacao && (
+                <div className="text-xs text-muted-foreground italic">
+                  {ocorrencia.observacao}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
+// ============================================================
+// Notas gerais (observação livre)
+// ============================================================
+function NotasEditor({
+  transferencia,
+  editarFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  editarFn: ReturnType<typeof useServerFn<typeof editarTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const inicial = parseObs(transferencia.observacao);
+  const [notas, setNotas] = useState(inicial.notas);
+  useEffect(() => setNotas(parseObs(transferencia.observacao).notas), [transferencia.observacao]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      editarFn({
+        data: {
+          transferenciaId: transferencia.id,
+          service: transferencia.service,
+          motorista: transferencia.motorista,
+          placa: transferencia.placa,
+          tipoVeiculo: transferencia.tipo_veiculo ?? undefined,
+          observacao: serializeObs({ rotas: inicial.rotas, notas }),
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Observações salvas.");
+      onSalvo();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao salvar observações."),
+  });
+
+  const alterada = notas !== inicial.notas;
+  return (
+    <Card className="p-4">
+      <h3 className="font-semibold text-sm mb-2">Observações</h3>
+      <textarea
+        value={notas}
+        onChange={(e) => setNotas(e.target.value)}
+        rows={3}
+        maxLength={2000}
+        className="w-full rounded-md border bg-background p-2 text-sm"
+        placeholder="Anote informações complementares sobre esta transferência."
+      />
+      <div className="flex justify-end mt-2">
+        <Button
+          size="sm"
+          disabled={!alterada || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          <Save className="w-3 h-3 mr-1" /> {mutation.isPending ? "Salvando…" : "Salvar"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// ============================================================
+// Próxima etapa
+// ============================================================
+function ProximaEtapaForm({
+  transferencia,
+  etapa,
+  marcoFn,
+  corrigirMarcoFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  etapa: TransferenciaEtapa | null;
+  marcoFn: ReturnType<typeof useServerFn<typeof registrarMarcoTransferencia>>;
+  corrigirMarcoFn: ReturnType<typeof useServerFn<typeof corrigirMarcoTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const [modoCorrigir, setModoCorrigir] = useState(false);
+  const etapaAtiva = etapa
+    ? etapa
+    : modoCorrigir
+      ? ("saida_xpt" as TransferenciaEtapa)
+      : null;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm">
+          {etapa ? "Próxima etapa" : "Transferência finalizada"}
+        </h3>
+        {!etapa && !modoCorrigir && (
+          <Button variant="outline" size="sm" onClick={() => setModoCorrigir(true)}>
+            <Pencil className="w-3 h-3 mr-1" /> Corrigir última etapa
+          </Button>
+        )}
+      </div>
+      {etapaAtiva ? (
+        <EtapaForm
+          transferencia={transferencia}
+          etapa={etapaAtiva}
+          modoCorrigir={!etapa}
+          marcoFn={marcoFn}
+          corrigirMarcoFn={corrigirMarcoFn}
+          onSalvo={() => {
+            setModoCorrigir(false);
+            onSalvo();
+          }}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Todas as etapas foram registradas com sucesso.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function EtapaForm({
+  transferencia,
+  etapa,
+  modoCorrigir,
+  marcoFn,
+  corrigirMarcoFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  etapa: TransferenciaEtapa;
+  modoCorrigir: boolean;
+  marcoFn: ReturnType<typeof useServerFn<typeof registrarMarcoTransferencia>>;
+  corrigirMarcoFn: ReturnType<typeof useServerFn<typeof corrigirMarcoTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const eventoAtual = eventoDe(transferencia, etapa);
+  const evidenciaAtual = transferencia.evidencias.find((e) => e.etapa === etapa);
+  const [horario, setHorario] = useState(dataHoraLocal(eventoAtual?.ocorrido_em));
+  const [localizacao, setLocalizacao] = useState(eventoAtual?.localizacao_texto ?? "");
+  const [foto, setFoto] = useState<File | null>(null);
+  const [timemark, setTimemark] = useState(evidenciaAtual?.timemark_url ?? "");
+  const [fotoKey, setFotoKey] = useState(0);
+  const etapaLabel = TRANSFERENCIA_ETAPAS.find((e) => e.value === etapa)?.label ?? etapa;
+
+  const mutation = useMutation({
     mutationFn: async () => {
       let storagePath: string | undefined;
       if (foto) {
         if (foto.size > 10 * 1024 * 1024) throw new Error("A foto deve ter no máximo 10 MB.");
-        storagePath = caminhoEvidenciaTransferencia(transferencia.base_id, transferencia.id, etapa, foto.name);
+        storagePath = caminhoEvidenciaTransferencia(
+          transferencia.base_id,
+          transferencia.id,
+          etapa,
+          foto.name,
+        );
         const { error } = await supabase.storage
           .from("transferencias-evidencias")
           .upload(storagePath, foto, { upsert: false, contentType: foto.type });
         if (error) throw new Error(error.message);
       }
       try {
-        return await corrigirFn({
+        if (modoCorrigir) {
+          return await corrigirMarcoFn({
+            data: {
+              transferenciaId: transferencia.id,
+              etapa,
+              ocorridoEm: new Date(horario).toISOString(),
+              localizacaoTexto: localizacao || undefined,
+              storagePath,
+              timemarkUrl: timemark,
+              horarioEvidencia:
+                foto || timemark ? new Date(horario).toISOString() : undefined,
+            },
+          });
+        }
+        return await marcoFn({
           data: {
             transferenciaId: transferencia.id,
             etapa,
             ocorridoEm: new Date(horario).toISOString(),
-            localizacaoTexto: localizacao || undefined,
             storagePath,
-            timemarkUrl: timemark,
-            horarioEvidencia: foto || timemark ? new Date(horario).toISOString() : undefined,
+            timemarkUrl: timemark || undefined,
+            horarioEvidencia:
+              foto || timemark ? new Date(horario).toISOString() : undefined,
+            localizacaoTexto: localizacao || undefined,
           },
         });
       } catch (error) {
-        if (storagePath) await supabase.storage.from("transferencias-evidencias").remove([storagePath]);
+        if (storagePath)
+          await supabase.storage.from("transferencias-evidencias").remove([storagePath]);
         throw error;
       }
     },
     onSuccess: () => {
-      toast.success("Etapa corrigida.");
-      setEditandoEtapa(false);
+      toast.success(modoCorrigir ? "Etapa corrigida." : "Etapa registrada.");
       setFoto(null);
-      setFotoKey((key) => key + 1);
-      onSuccess();
+      setFotoKey((k) => k + 1);
+      setTimemark("");
+      onSalvo();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao corrigir a etapa."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao registrar etapa."),
   });
-  const bloqueado = evento ? !editandoEtapa : !ativo;
-  const mensagem = evento ? editandoEtapa ? "Corrija os campos necessários e salve" : "Etapa registrada" : ativo ? "Preencha e salve" : "Aguardando etapa anterior";
-  const cancelarEdicao = () => {
-    setHorario(dataHoraLocal(evento?.ocorrido_em));
-    setLocalizacao(evento?.localizacao_texto ?? "");
-    setTimemark(evidencia?.timemark_url ?? "");
-    setFoto(null);
-    setFotoKey((key) => key + 1);
-    setEditandoEtapa(false);
-  };
-  return <Fragment><td className={`p-2 align-top min-w-[190px] ${ativo || editandoEtapa ? "bg-sky-50/60" : ""}`}><div className="space-y-2"><Input aria-label={`Horário ${etapa}`} type="datetime-local" value={horario} disabled={bloqueado} onChange={(e) => setHorario(e.target.value)} className="h-8 text-xs" /><Input aria-label={`Localização ${etapa}`} value={localizacao} disabled={bloqueado} onChange={(e) => setLocalizacao(e.target.value)} placeholder="Localização" className="h-8 text-xs" />{evento && !editandoEtapa && <Button variant="outline" size="sm" className="w-full h-8" onClick={() => { setHorario(dataHoraLocal(evento.ocorrido_em)); setLocalizacao(evento.localizacao_texto ?? ""); setTimemark(evidencia?.timemark_url ?? ""); setEditandoEtapa(true); }}><Pencil className="w-3 h-3 mr-1" />Editar etapa</Button>}{evento && editandoEtapa && <div className="flex gap-1"><Button size="sm" className="flex-1 h-8" disabled={corrigirMutation.isPending} onClick={() => corrigirMutation.mutate()}><Save className="w-3 h-3 mr-1" />{corrigirMutation.isPending ? "Salvando…" : "Salvar correção"}</Button><Button variant="ghost" size="icon" className="h-8 w-8" title="Cancelar correção" onClick={cancelarEdicao}><X className="w-3 h-3" /></Button></div>}<div className="text-[11px] text-muted-foreground">{mensagem}</div></div></td><td className={`p-2 align-top min-w-[230px] ${ativo || editandoEtapa ? "bg-sky-50/60" : ""}`}><div className="space-y-2"><Input aria-label={`Link ${etapa}`} type="url" value={timemark} disabled={evento ? !editandoEtapa : !ativo} onChange={(e) => setTimemark(e.target.value)} placeholder="Link TimeMark ou evidência" className="h-8 text-xs" /><Input key={fotoKey} aria-label={`Foto ${etapa}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={evento ? !editandoEtapa : !ativo} onChange={(e) => setFoto(e.target.files?.[0] ?? null)} className="h-8 text-xs file:text-xs" />{evento ? <EvidenceLink evidencia={evidencia} /> : <Button size="sm" className="w-full h-8" disabled={!ativo || mutation.isPending} onClick={() => mutation.mutate()}><Save className="w-3 h-3 mr-1" />{mutation.isPending ? "Salvando…" : "Salvar etapa"}</Button>}</div></td></Fragment>;
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm">
+        Etapa: <b>{etapaLabel}</b>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Horário</Label>
+          <Input
+            type="datetime-local"
+            value={horario}
+            onChange={(e) => setHorario(e.target.value)}
+            className="h-9"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Localização</Label>
+          <Input
+            value={localizacao}
+            onChange={(e) => setLocalizacao(e.target.value)}
+            placeholder="Ex.: SSP20 / doca 3"
+            className="h-9"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Foto (opcional)</Label>
+          <Input
+            key={fotoKey}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            onChange={(e) => setFoto(e.target.files?.[0] ?? null)}
+            className="h-9 text-xs file:text-xs"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Link TimeMark (opcional)</Label>
+          <Input
+            type="url"
+            value={timemark}
+            onChange={(e) => setTimemark(e.target.value)}
+            placeholder="https://..."
+            className="h-9"
+          />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+          <Save className="w-4 h-4 mr-1" />
+          {mutation.isPending
+            ? "Salvando…"
+            : modoCorrigir
+              ? "Salvar correção"
+              : "Registrar etapa"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Dialog: Fotos
+// ============================================================
+function FotosDialog({
+  transferencia,
+  onFechar,
+}: {
+  transferencia: TransferenciaDetalhe | null;
+  onFechar: () => void;
+}) {
+  const fotos = transferencia
+    ? transferencia.evidencias
+        .filter((e) => e.signed_url)
+        .map((e) => ({
+          url: e.signed_url as string,
+          etapa: e.etapa,
+          horario: e.horario_evidencia,
+        }))
+    : [];
+  return (
+    <Dialog open={!!transferencia} onOpenChange={(open) => !open && onFechar()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Fotos da transferência</DialogTitle>
+          <DialogDescription>
+            {transferencia
+              ? `${transferencia.codigo} · ${transferencia.motorista} · ${transferencia.placa}`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {fotos.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            Nenhuma foto anexada nas etapas desta transferência.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto">
+            {fotos.map((f, i) => {
+              const etapaLabel =
+                TRANSFERENCIA_ETAPAS.find((e) => e.value === f.etapa)?.label ?? f.etapa;
+              return (
+                <a
+                  key={i}
+                  href={f.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block group border rounded-md overflow-hidden"
+                >
+                  <img
+                    src={f.url}
+                    alt={etapaLabel}
+                    className="w-full h-40 object-cover group-hover:opacity-90"
+                    loading="lazy"
+                  />
+                  <div className="p-2 text-xs">
+                    <b>{etapaLabel}</b>
+                    {f.horario && (
+                      <div className="text-muted-foreground">
+                        {new Date(f.horario).toLocaleString("pt-BR")}
+                      </div>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onFechar}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// Dialog: Nova transferência
+// ============================================================
+function NovaTransferenciaDialog({
+  aberto,
+  onFechar,
+  serviceFixo,
+  services,
+  salvando,
+  onSalvar,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  serviceFixo: string;
+  services: string[];
+  salvando: boolean;
+  onSalvar: (dados: {
+    motorista: string;
+    placa: string;
+    tipoVeiculo?: string;
+    service: string;
+  }) => void;
+}) {
+  const [motorista, setMotorista] = useState("");
+  const [placa, setPlaca] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [service, setService] = useState(serviceFixo || services[0] || "");
+
+  useEffect(() => {
+    if (aberto) {
+      setMotorista("");
+      setPlaca("");
+      setTipo("");
+      setService(serviceFixo || services[0] || "");
+    }
+  }, [aberto, serviceFixo, services]);
+
+  const valido =
+    motorista.trim().length >= 2 && placa.trim().length >= 5 && (serviceFixo || service).length >= 2;
+
+  return (
+    <Dialog open={aberto} onOpenChange={(open) => !open && onFechar()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova Transferência</DialogTitle>
+          <DialogDescription>
+            Cadastre o veículo. Rotas e etapas poderão ser preenchidas depois.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Service</Label>
+            {serviceFixo ? (
+              <Input value={serviceFixo} disabled className="font-semibold" />
+            ) : (
+              <Select value={service} onValueChange={setService}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div>
+            <Label>Motorista</Label>
+            <Input
+              value={motorista}
+              onChange={(e) => setMotorista(e.target.value)}
+              placeholder="Nome do motorista"
+            />
+          </div>
+          <div>
+            <Label>Placa</Label>
+            <Input
+              value={placa}
+              onChange={(e) => setPlaca(e.target.value.toUpperCase())}
+              placeholder="ABC1D23"
+            />
+          </div>
+          <div>
+            <Label>Tipo de veículo</Label>
+            <Input
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+              placeholder="Truck, Van…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={!valido || salvando}
+            onClick={() =>
+              onSalvar({
+                motorista,
+                placa,
+                tipoVeiculo: tipo || undefined,
+                service: serviceFixo || service,
+              })
+            }
+          >
+            <Save className="w-4 h-4 mr-1" />
+            {salvando ? "Criando…" : "Criar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// Dialog: Editar transferência
+// ============================================================
+function EditarTransferenciaDialog({
+  transferencia,
+  onFechar,
+  serviceFixo,
+  services,
+  editarFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe | null;
+  onFechar: () => void;
+  serviceFixo: string;
+  services: string[];
+  editarFn: ReturnType<typeof useServerFn<typeof editarTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const [motorista, setMotorista] = useState("");
+  const [placa, setPlaca] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [service, setService] = useState("");
+
+  useEffect(() => {
+    if (transferencia) {
+      setMotorista(transferencia.motorista);
+      setPlaca(transferencia.placa);
+      setTipo(transferencia.tipo_veiculo ?? "");
+      setService(transferencia.service);
+    }
+  }, [transferencia]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      editarFn({
+        data: {
+          transferenciaId: transferencia!.id,
+          service: serviceFixo || service,
+          motorista,
+          placa,
+          tipoVeiculo: tipo || undefined,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Transferência atualizada.");
+      onFechar();
+      onSalvo();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao editar."),
+  });
+
+  const valido =
+    motorista.trim().length >= 2 && placa.trim().length >= 5 && (serviceFixo || service).length >= 2;
+
+  return (
+    <Dialog open={!!transferencia} onOpenChange={(open) => !open && onFechar()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar transferência</DialogTitle>
+          <DialogDescription>{transferencia?.codigo}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Service</Label>
+            {serviceFixo ? (
+              <Input value={serviceFixo} disabled className="font-semibold" />
+            ) : (
+              <Select value={service} onValueChange={setService}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div>
+            <Label>Motorista</Label>
+            <Input value={motorista} onChange={(e) => setMotorista(e.target.value)} />
+          </div>
+          <div>
+            <Label>Placa</Label>
+            <Input value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} />
+          </div>
+          <div>
+            <Label>Tipo de veículo</Label>
+            <Input value={tipo} onChange={(e) => setTipo(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button disabled={!valido || mutation.isPending} onClick={() => mutation.mutate()}>
+            <Save className="w-4 h-4 mr-1" />
+            {mutation.isPending ? "Salvando…" : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// KPI Card
+// ============================================================
+function Kpi({
+  titulo,
+  valor,
+  icone: Icon,
+  tom = "default",
+}: {
+  titulo: string;
+  valor: string | number;
+  icone: typeof Truck;
+  tom?: "default" | "success" | "warning" | "danger";
+}) {
+  const caixa =
+    tom === "success"
+      ? "bg-emerald-50 text-emerald-600"
+      : tom === "warning"
+        ? "bg-amber-50 text-amber-600"
+        : tom === "danger"
+          ? "bg-red-50 text-red-600"
+          : "bg-primary/10 text-primary";
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${caixa}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-2xl font-bold truncate">{valor}</div>
+          <div className="text-xs text-muted-foreground">{titulo}</div>
+        </div>
+      </div>
+    </Card>
+  );
 }
