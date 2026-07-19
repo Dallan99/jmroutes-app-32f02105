@@ -569,6 +569,7 @@ const editarSchema = z.object({
   motorista: z.string().trim().min(2).max(160),
   placa: z.string().trim().min(5).max(20),
   tipoVeiculo: z.string().trim().max(80).optional(),
+  observacao: z.string().max(4000).optional(),
 });
 
 export const editarTransferencia = createServerFn({ method: "POST" })
@@ -577,18 +578,21 @@ export const editarTransferencia = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: anterior, error: leituraError } = await context.supabase
       .from("transferencias")
-      .select("id, service, motorista, placa, tipo_veiculo, status")
+      .select("id, service, motorista, placa, tipo_veiculo, status, observacao")
       .eq("id", data.transferenciaId)
       .single();
     if (leituraError) throw new Error(leituraError.message);
     if (anterior.status === "cancelada") throw new Error("Transferência cancelada não pode ser editada.");
 
-    const novo = {
+    const novo: Record<string, unknown> = {
       service: data.service.toUpperCase(),
       motorista: data.motorista.trim(),
       placa: data.placa.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
       tipo_veiculo: data.tipoVeiculo?.trim() || null,
     };
+    if (data.observacao !== undefined) {
+      novo.observacao = data.observacao.trim() || null;
+    }
     const { data: result, error } = await context.supabase
       .from("transferencias")
       .update(novo)
@@ -596,6 +600,7 @@ export const editarTransferencia = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
+
 
     const { registrarAuditInterno } = await import("./audit.server");
     await registrarAuditInterno(context.supabase, context.userId, {
