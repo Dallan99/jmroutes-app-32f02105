@@ -1,49 +1,107 @@
-## Escopo por base + Devolução de Insucessos
 
-### 1. Modelo de acesso por base
+# Plano — Evolução do módulo Transferências
 
-**Regras**
-- **Operador**: 1 base (já existe `profiles.base_id`). Só acessa Recebimento, Bases (upload de rotas), Triagem e Contagem — sempre filtrado pela sua base. Não vê Usuários nem outras bases.
-- **Supervisor**: N bases (nova tabela `user_bases`). Acessa as mesmas áreas que operador, restrito às bases atreladas.
-- **Gerente / Admin**: acesso total, seletor de base livre.
+## Escopo
+- Apenas `src/routes/_authenticated/transferencias.tsx` e helpers próprios.
+- Zero alteração em: banco (schema/RPCs/RLS), autenticação, Recebimento, Triagem, Dashboard, Inventário, Gerencial, Bases.
+- Preservar identidade visual (Cards, Badges, Botões, cores e espaçamentos já usados no JM Routes).
 
-**Banco (migração)**
-- Nova tabela `user_bases (user_id, base_id)` + GRANTs + RLS.
-- Funções security-definer:
-  - `has_base_access(_user uuid, _base uuid)` → true se admin/gerente, ou `profiles.base_id = _base`, ou linha em `user_bases`.
-  - `get_user_bases(_user uuid)` → setof uuid (bases permitidas).
-- Atualiza RLS de `bases_operacionais`, `shipments`, `importacoes_escala`, `escalas`, `contagens`, `rotas`, `volumes`, `recebimentos` para usar `has_base_access(auth.uid(), base_id)`.
+## Restrições confirmadas
+- 4 etapas já existem no banco (`chegada_service`, `saida_service`, `chegada_xpt`, `saida_xpt`) via RPC `registrar_evento_transferencia_v2` — nada muda no SQL.
+- "Uma transferência com várias rotas": será tratado como conceito de UI. Cada rota vira um **grupo lógico de transferências** (uma linha por rota no banco, agrupadas pela mesma placa+motorista+data+base+service). Isso evita alterar o schema. Se o usuário quiser rotas persistidas como entidade separada, será outra entrega com migration dedicada.
 
-**Frontend**
-- `useAllowedBases()` hook → lista de bases permitidas.
-- `AppShell`: se só 1 base permitida, seleciona automaticamente e esconde o botão trocar. Se múltiplas, mostra seletor limitado à lista permitida.
-- `bases.tsx`: mostra só as bases permitidas; operador/supervisor só sobe escala nas suas.
-- Sidebar: esconde "Usuários" para não-admin (já hoje é assim para operador; garantir para supervisor também mostrar só as áreas relevantes).
-- Guard nas rotas `/usuarios` → só admin.
+## Trabalho por área
 
-### 2. Devolução de Insucessos
+### 1. Renomear botão
+- "+ Nova rota" → "+ Nova Transferência" no cabeçalho da tabela e no rascunho.
 
-**Banco**
-- Nova tabela `devolucoes`:
-  - `shipment_id`, `escala_id`, `base_id`, `rota` (nullable), `motivo` (enum), `observacao`, `devolvido_por`, `devolvido_em`.
-- Enum `motivo_devolucao`: `cliente_ausente`, `endereco_nao_localizado`, `recusado`, `avaria`, `zona_de_risco`, `outros`.
-- Campo `devolvido bool` + `devolvido_em` em `escalas` para consulta rápida.
-- GRANTs + RLS por `has_base_access`.
+### 2. Fluxo com 4 etapas
+- Já implementado no backend. Ajustar UI para expor a etapa `saida_xpt` no cabeçalho e no formulário inline (`EtapaFormCells`), respeitando `proximaEtapa`.
 
-**Frontend**
-- Nova rota `/_authenticated/devolucoes.tsx`:
-  - Header segue padrão (base + dia operacional).
-  - Input de bipagem grande, buscar shipment na base ativa.
-  - Modal ao bipar: escolher motivo (radios) + observação opcional → salvar.
-  - Lista das devoluções do dia com motivo e horário; ação de desfazer (admin/supervisor).
-  - Bipagem duplicada → aviso "já devolvido em HH:mm por X".
-- Sidebar: item "Devoluções" (ícone RotateCcw) — visível para roles com acesso a operações da base.
+### 3. Coluna Status com Badges
+- Nova coluna `Status` derivada do campo `status` da transferência:
+  - `aguardando_chegada_service` → cinza · "Aguardando Service"
+  - `no_service` / `pendente_evidencia` (no Service) → azul · "No Service"
+  - `em_transito_xpt` → laranja · "Em trânsito"
+  - `no_xpt` → azul · "No XPT"
+  - `concluida_no_prazo` / `concluida_com_atraso` → verde · "Finalizada"
+  - `cancelada` → cinza · "Cancelada"
 
-### Ordem de execução
-1. Migração escopo por base (`user_bases`, funções, RLS).
-2. Migração devoluções.
-3. Refactor `AppShell` + hook `useAllowedBases`.
-4. Nova página `/devolucoes`.
-5. Ajustes em `bases.tsx` para respeitar bases permitidas.
+### 4. Coluna "Tempo aguardando carga" (KPI principal)
+- Cronômetro ao vivo entre `chegada_service` e `saida_service`.
+- Se ainda sem saída: usa `now()` para tempo em curso; se saída já registrada: fixa o valor final.
+- Cores: ≤30 min verde, 30–60 min amarelo, >60 min vermelho.
+- Atualiza a cada 30 s via `useClock` (já existe em `use-clock.ts`).
 
-Aviso: as mudanças de RLS afetam todas as telas — vou testar após aplicar. Se algum operador atual não tiver `profiles.base_id` setado, ele perde acesso — vamos precisar preencher.
+### 5. Evidências como ícone
+- Remove a coluna "Evidência" atual.
+- Novo botão-ícone câmera por linha → abre `DialogoFotosTransferencia` mostrando todas as fotos das 4 etapas com URL assinada (reusa `caminhoEvidenciaTransferencia` + `supabase.storage.createSignedUrl`).
+
+### 6. Timeline de histórico
+- Componente `TimelineTransferencia` exibindo os 4 eventos em ordem cronológica com horário, usuário e observação. Fica dentro da linha expandida.
+
+### 7. Múltiplas rotas por transferência (UI)
+- Agrupamento no cliente: uma "Transferência" = grupo por (base + service + data + placa + motorista); cada linha do grupo representa uma "Rota" com o código gerado (`codigo` já existe).
+- Ao expandir: lista de rotas com Código + Observação + botões Editar/Excluir.
+- Botão "+ Adicionar rota" no header do grupo cria uma nova linha via `criarTransferenciasLote` (uma linha).
+
+### 8. Expansão da linha
+- Estado `expandidaId` local. Ao clicar na linha (chevron) mostra dentro da mesma tabela:
+  - Lista de rotas do grupo.
+  - Timeline.
+  - Miniaturas de fotos.
+  - Observações.
+
+### 9. Dashboard superior (cards KPI)
+- Substituir cards atuais por: Em andamento, Finalizadas hoje, Tempo médio aguardando carga, Maior tempo aguardando carga, Atrasadas, Total de veículos (placas distintas do dia).
+- Todos computados a partir do `useQuery` já existente.
+
+### 10. Filtros extras
+- Adicionar: Status (Select), Motorista (Input), Placa (Input). Manter Base/Service/Data/Busca.
+
+### 11. Ações por linha
+- Menu com: Visualizar (expandir), Editar, Atualizar etapa, Excluir. Excluir só aparece para admin (`has_role('admin')` já disponível via `context.claims`; no cliente, ler role do `useBaseOperacional` — verificar disponibilidade; se não houver, esconder para não-admin via check server).
+
+### 12. Persistência do "Salvar"
+- Auditar `editarTransferencia`. Garantir que a mutation invalida a query e trata erro. Adicionar toast de sucesso somente após `onSuccess`.
+- Substituir eventual `optimistic update` incompleto por `queryClient.setQueryData` na resposta.
+
+### 13. Responsividade
+- Reduzir colunas em telas <1280px (esconder tipo de veículo/serviço); manter ações e status sempre visíveis. `overflow-x-auto` só como fallback.
+
+### 14. Performance
+- Após mutations, atualizar somente a entrada afetada via `setQueryData` — sem `invalidateQueries` total. `refetchOnWindowFocus: false` para tabela grande.
+
+### 15. Padrão visual
+- Reutilizar `Card`, `Badge`, `Button variant="ghost|outline|default"`, ícones lucide já usados. Nenhum estilo inline novo.
+
+### 16. Restrições
+- Nenhum outro arquivo do app é tocado.
+
+## Detalhes técnicos
+
+**Arquivos alterados (frontend apenas):**
+- `src/routes/_authenticated/transferencias.tsx` — refatoração principal.
+- Novos componentes (mesmo arquivo ou co-localizados em `src/components/transferencias/`):
+  - `StatusBadge.tsx`, `TempoAguardandoCarga.tsx`, `DialogoFotos.tsx`, `TimelineTransferencia.tsx`, `LinhaExpandida.tsx`.
+- Possivelmente pequenos helpers em `src/lib/transferencias.functions.ts` (funções puras client-side; sem tocar server functions).
+
+**Testes:**
+- Ampliar `tests/characterization/transferencias.test.ts` para cobrir:
+  - Regras de status → cor.
+  - Cálculo de "tempo aguardando carga" e faixas verde/amarelo/vermelho.
+  - Agrupamento de rotas.
+
+**Validação final:**
+- `bun run test` (esperado: 31 anteriores + novos passando)
+- `tsgo` sem erros
+- `bun run build` sem erros
+- Revisão visual da tela no preview
+
+## Fora deste plano
+- Migração de schema para tabela `rotas_transferencia` separada (só se o usuário pedir explicitamente).
+- Publicação em produção (proibida por regra do playground).
+- Alterações em outros módulos.
+
+## Pergunta antes de começar
+Confirma o approach de **"rotas = agrupamento lógico no cliente"** (sem migration) OU prefere que eu proponha uma migration aditiva criando uma tabela `transferencia_rotas` para representar rotas como entidade real? A primeira opção é mais rápida e reversível; a segunda é mais robusta a longo prazo mas exige aprovar SQL.
