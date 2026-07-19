@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Boxes, ScanBarcode, PackageSearch, ClipboardList, TrendingUp, RotateCcw } from "lucide-react";
 import { JmLogo } from "@/components/jm-logo";
+import jmHero from "@/assets/jm-hero.png.asset.json";
 
 export const Route = createFileRoute("/_authenticated/inicio")({
   component: InicioPage,
