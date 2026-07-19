@@ -595,6 +595,125 @@ export type Database = {
           },
         ]
       }
+      inventario_leituras: {
+        Row: {
+          base_id: string
+          bipado_em: string
+          bipado_por: string
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelamento_motivo: string | null
+          codigo: string
+          created_at: string
+          dia_operacional: string
+          id: string
+          inventario_id: string
+        }
+        Insert: {
+          base_id: string
+          bipado_em?: string
+          bipado_por: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo: string
+          created_at?: string
+          dia_operacional: string
+          id?: string
+          inventario_id: string
+        }
+        Update: {
+          base_id?: string
+          bipado_em?: string
+          bipado_por?: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo?: string
+          created_at?: string
+          dia_operacional?: string
+          id?: string
+          inventario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_leituras_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_leituras_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventarios: {
+        Row: {
+          base_id: string
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelamento_motivo: string | null
+          created_at: string
+          criado_por: string
+          dia_operacional: string
+          finalizado_em: string | null
+          finalizado_por: string | null
+          id: string
+          observacao: string | null
+          responsavel: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          base_id: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          created_at?: string
+          criado_por: string
+          dia_operacional: string
+          finalizado_em?: string | null
+          finalizado_por?: string | null
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          base_id?: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          created_at?: string
+          criado_por?: string
+          dia_operacional?: string
+          finalizado_em?: string | null
+          finalizado_por?: string | null
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventarios_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motoristas: {
         Row: {
           ativo: boolean
@@ -904,6 +1023,53 @@ export type Database = {
           },
         ]
       }
+      transferencia_eventos: {
+        Row: {
+          created_at: string
+          etapa: string
+          id: string
+          latitude: number | null
+          localizacao_texto: string | null
+          longitude: number | null
+          minutos_atraso: number
+          ocorrido_em: string
+          registrado_por: string
+          transferencia_id: string
+        }
+        Insert: {
+          created_at?: string
+          etapa: string
+          id?: string
+          latitude?: number | null
+          localizacao_texto?: string | null
+          longitude?: number | null
+          minutos_atraso?: number
+          ocorrido_em: string
+          registrado_por: string
+          transferencia_id: string
+        }
+        Update: {
+          created_at?: string
+          etapa?: string
+          id?: string
+          latitude?: number | null
+          localizacao_texto?: string | null
+          longitude?: number | null
+          minutos_atraso?: number
+          ocorrido_em?: string
+          registrado_por?: string
+          transferencia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_eventos_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transferencia_evidencias: {
         Row: {
           created_at: string
@@ -956,46 +1122,29 @@ export type Database = {
           validado_em?: string | null
           validado_por?: string | null
         }
-        Relationships: []
-      }
-      transferencia_eventos: {
-        Row: {
-          created_at: string
-          etapa: string
-          id: string
-          latitude: number | null
-          localizacao_texto: string | null
-          longitude: number | null
-          minutos_atraso: number
-          ocorrido_em: string
-          registrado_por: string
-          transferencia_id: string
-        }
-        Insert: {
-          created_at?: string
-          etapa: string
-          id?: string
-          latitude?: number | null
-          localizacao_texto?: string | null
-          longitude?: number | null
-          minutos_atraso?: number
-          ocorrido_em: string
-          registrado_por: string
-          transferencia_id: string
-        }
-        Update: {
-          created_at?: string
-          etapa?: string
-          id?: string
-          latitude?: number | null
-          localizacao_texto?: string | null
-          longitude?: number | null
-          minutos_atraso?: number
-          ocorrido_em?: string
-          registrado_por?: string
-          transferencia_id?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_evidencias_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_evidencias_substituida_por_fkey"
+            columns: ["substituida_por"]
+            isOneToOne: false
+            referencedRelation: "transferencia_evidencias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_evidencias_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transferencia_motivos: {
         Row: {
@@ -1070,7 +1219,29 @@ export type Database = {
           responsabilidade?: string
           transferencia_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_ocorrencias_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_ocorrencias_motivo_id_fkey"
+            columns: ["motivo_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_motivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_ocorrencias_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transferencia_slas: {
         Row: {
@@ -1106,7 +1277,15 @@ export type Database = {
           transito_max_minutos?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_slas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transferencias: {
         Row: {
@@ -1166,7 +1345,15 @@ export type Database = {
           tipo_veiculo?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_bases: {
         Row: {
@@ -1333,8 +1520,8 @@ export type Database = {
       anexar_evidencia_transferencia: {
         Args: {
           p_etapa: string
-          p_horario_evidencia?: string | null
-          p_localizacao_texto?: string | null
+          p_horario_evidencia?: string
+          p_localizacao_texto?: string
           p_storage_path: string
           p_timemark_url: string
           p_transferencia_id: string
@@ -1350,11 +1537,15 @@ export type Database = {
           p_base_id: string
           p_data_operacional: string
           p_motorista: string
-          p_observacao?: string | null
+          p_observacao?: string
           p_placa: string
           p_service: string
-          p_tipo_veiculo?: string | null
+          p_tipo_veiculo?: string
         }
+        Returns: Json
+      }
+      finalizar_inventario: {
+        Args: { p_inventario_id: string; p_observacao?: string }
         Returns: Json
       }
       get_allowed_bases: { Args: { _user_id: string }; Returns: string[] }
@@ -1369,44 +1560,33 @@ export type Database = {
         }
         Returns: boolean
       }
+      inventario_base_access: {
+        Args: { _base_id: string; _user_id: string }
+        Returns: boolean
+      }
+      inventario_global_access: { Args: { _user_id: string }; Returns: boolean }
       registrar_evento_transferencia: {
         Args: {
           p_etapa: string
-          p_horario_evidencia?: string | null
-          p_localizacao_texto?: string | null
-          p_motivo_codigo?: string | null
-          p_observacao?: string | null
+          p_horario_evidencia?: string
+          p_localizacao_texto?: string
+          p_motivo_codigo?: string
+          p_observacao?: string
           p_ocorrido_em: string
-          p_responsabilidade?: string | null
-          p_storage_path?: string | null
-          p_timemark_url?: string | null
+          p_responsabilidade?: string
+          p_storage_path?: string
+          p_timemark_url?: string
           p_transferencia_id: string
         }
         Returns: Json
       }
-      registrar_evento_transferencia_v2: {
+      registrar_leitura_inventario: {
         Args: {
-          p_etapa: string
-          p_horario_evidencia?: string | null
-          p_localizacao_texto?: string | null
-          p_motivo_codigo?: string | null
-          p_observacao?: string | null
-          p_ocorrido_em: string
-          p_responsabilidade?: string | null
-          p_storage_path?: string | null
-          p_timemark_url?: string | null
-          p_transferencia_id: string
-        }
-        Returns: Json
-      }
-      anexar_evidencia_transferencia_v2: {
-        Args: {
-          p_etapa: string
-          p_horario_evidencia?: string | null
-          p_localizacao_texto?: string | null
-          p_storage_path?: string | null
-          p_timemark_url?: string | null
-          p_transferencia_id: string
+          p_base_id: string
+          p_codigo: string
+          p_dia_operacional: string
+          p_observacao?: string
+          p_responsavel?: string
         }
         Returns: Json
       }
@@ -1427,10 +1607,6 @@ export type Database = {
       transferencia_base_access: {
         Args: { _base_id: string; _user_id: string }
         Returns: boolean
-      }
-      transferencia_status_atual: {
-        Args: { p_transferencia_id: string }
-        Returns: string
       }
     }
     Enums: {
