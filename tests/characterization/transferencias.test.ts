@@ -69,10 +69,11 @@ describe("Transferências — fluxo operacional", () => {
   });
 
   it("mantém as três primeiras etapas funcionando enquanto a função v2 não está no banco", () => {
-    expect(loteSource).toContain('rpc("registrar_evento_transferencia"');
+    expect(loteSource).toContain('rpc as any)("registrar_evento_transferencia"');
     expect(loteSource).toContain('data.etapa !== "saida_xpt"');
     expect(readFileSync(resolve(process.cwd(), "src/lib/transferencias.functions.ts"), "utf8")).toContain("As três etapas anteriores continuam disponíveis");
   });
+
 
   it("prioriza no gerencial a disponibilidade da JM e a espera por carga no Service", () => {
     expect(gerencialSource).toContain("disponibilizados_ate_7");
