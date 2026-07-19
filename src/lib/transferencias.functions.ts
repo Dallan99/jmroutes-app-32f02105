@@ -285,7 +285,7 @@ export const criarTransferencia = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => criarSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: result, error } = await context.supabase.rpc("criar_transferencia", {
+    const { data: result, error } = await (context.supabase.rpc as any)("criar_transferencia", {
       p_base_id: data.baseId,
       p_data_operacional: data.dataOperacional,
       p_service: data.service,
@@ -315,7 +315,7 @@ export const registrarMarcoTransferencia = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => marcoSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: result, error } = await context.supabase.rpc("registrar_evento_transferencia_v2", {
+    const { data: result, error } = await (context.supabase.rpc as any)("registrar_evento_transferencia_v2", {
       p_transferencia_id: data.transferenciaId,
       p_etapa: data.etapa,
       p_ocorrido_em: data.ocorridoEm,
@@ -335,7 +335,7 @@ export const registrarMarcoTransferencia = createServerFn({ method: "POST" })
       throw new Error("A etapa Saída do XPT aguarda a atualização do banco. As três etapas anteriores continuam disponíveis.");
     }
 
-    const { data: legado, error: legadoError } = await context.supabase.rpc("registrar_evento_transferencia", {
+    const { data: legado, error: legadoError } = await (context.supabase.rpc as any)("registrar_evento_transferencia", {
       p_transferencia_id: data.transferenciaId,
       p_etapa: data.etapa,
       p_ocorrido_em: data.ocorridoEm,
@@ -532,7 +532,7 @@ export const anexarEvidenciaTransferencia = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => evidenciaSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: result, error } = await context.supabase.rpc("anexar_evidencia_transferencia_v2", {
+    const { data: result, error } = await (context.supabase.rpc as any)("anexar_evidencia_transferencia_v2", {
       p_transferencia_id: data.transferenciaId,
       p_etapa: data.etapa,
       p_storage_path: data.storagePath,

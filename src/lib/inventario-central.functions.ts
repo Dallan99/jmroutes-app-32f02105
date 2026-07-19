@@ -112,11 +112,11 @@ export const listarInventarioCentral = createServerFn({ method: "POST" })
     });
     if (filtros.usuario) {
       const termo = filtros.usuario.toLocaleUpperCase("pt-BR");
-      leituras = leituras.filter((l) => (l.bipado_por_nome ?? "").toLocaleUpperCase("pt-BR").includes(termo));
+      leituras = leituras.filter((l: InventarioCentralLinha) => (l.bipado_por_nome ?? "").toLocaleUpperCase("pt-BR").includes(termo));
     }
 
     const totalPorInventario = new Map<string, number>();
-    for (const l of leituras.filter((x) => !x.cancelado)) {
+    for (const l of leituras.filter((x: InventarioCentralLinha) => !x.cancelado)) {
       totalPorInventario.set(l.inventario_id, (totalPorInventario.get(l.inventario_id) ?? 0) + 1);
     }
 
