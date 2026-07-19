@@ -22,9 +22,12 @@ function InicioPage() {
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
       <section className="relative overflow-hidden rounded-2xl border bg-card">
         <img
-          src="/jm-hero.png"
+          src={jmHero.url}
           alt="Frota JM Transportes"
           className="w-full h-56 md:h-72 object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-transparent" />
         <div className="absolute inset-0 flex items-center px-6 md:px-10">
