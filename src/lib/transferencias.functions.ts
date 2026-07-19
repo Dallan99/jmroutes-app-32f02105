@@ -584,7 +584,13 @@ export const editarTransferencia = createServerFn({ method: "POST" })
     if (leituraError) throw new Error(leituraError.message);
     if (anterior.status === "cancelada") throw new Error("Transferência cancelada não pode ser editada.");
 
-    const novo: Record<string, unknown> = {
+    const novo: {
+      service: string;
+      motorista: string;
+      placa: string;
+      tipo_veiculo: string | null;
+      observacao?: string | null;
+    } = {
       service: data.service.toUpperCase(),
       motorista: data.motorista.trim(),
       placa: data.placa.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
@@ -600,6 +606,7 @@ export const editarTransferencia = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
+
 
 
     const { registrarAuditInterno } = await import("./audit.server");
