@@ -17,9 +17,7 @@ describe("recebimento.bipar — caracterização do código atual", () => {
 
   it("insert em recebimentos não desestrutura error (auditoria best-effort)", () => {
     expect(src).toMatch(/from\("recebimentos"\)\s*\.insert\(/);
-    expect(src).not.toMatch(
-      /const\s*\{\s*error[^}]*\}\s*=\s*await\s+supabase\s*\.from\("recebimentos"\)/,
-    );
+    expect(src).not.toMatch(/const\s*\{\s*error[^}]*\}\s*=\s*await\s+supabase\s*\.from\("recebimentos"\)/);
   });
 
   it("log usa base da ROTA (r.base_id), não a base do operador", () => {

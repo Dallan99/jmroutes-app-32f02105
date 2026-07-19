@@ -14,16 +14,1630 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          acao: string
+          created_at: string
+          detalhes: Json | null
+          entidade: string | null
+          entidade_id: string | null
+          id: string
+          ip: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string
+          detalhes?: Json | null
+          entidade?: string | null
+          entidade_id?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string
+          detalhes?: Json | null
+          entidade?: string | null
+          entidade_id?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      bases: {
+        Row: {
+          ativa: boolean
+          cidade: string
+          codigo: string
+          created_at: string
+          id: string
+          nome: string
+          uf: string
+        }
+        Insert: {
+          ativa?: boolean
+          cidade: string
+          codigo: string
+          created_at?: string
+          id?: string
+          nome: string
+          uf: string
+        }
+        Update: {
+          ativa?: boolean
+          cidade?: string
+          codigo?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          uf?: string
+        }
+        Relationships: []
+      }
+      bases_operacionais: {
+        Row: {
+          ativada_em: string | null
+          created_at: string
+          data_operacional: string
+          escala_jm_hora: string | null
+          escala_jm_nome: string | null
+          escala_jm_pacotes: number | null
+          escala_jm_rotas: number | null
+          escala_xpt_hora: string | null
+          escala_xpt_nome: string | null
+          escala_xpt_rotas: number | null
+          escala_xpt_shipments: number | null
+          facility: string | null
+          id: string
+          importado_por: string | null
+          status: Database["public"]["Enums"]["base_status"]
+          total_bairros: number | null
+          total_cidades: number | null
+          total_motoristas: number | null
+          total_pacotes: number | null
+          total_rotas: number | null
+          total_shipments: number | null
+          total_veiculos: number | null
+          transportadora: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativada_em?: string | null
+          created_at?: string
+          data_operacional: string
+          escala_jm_hora?: string | null
+          escala_jm_nome?: string | null
+          escala_jm_pacotes?: number | null
+          escala_jm_rotas?: number | null
+          escala_xpt_hora?: string | null
+          escala_xpt_nome?: string | null
+          escala_xpt_rotas?: number | null
+          escala_xpt_shipments?: number | null
+          facility?: string | null
+          id?: string
+          importado_por?: string | null
+          status?: Database["public"]["Enums"]["base_status"]
+          total_bairros?: number | null
+          total_cidades?: number | null
+          total_motoristas?: number | null
+          total_pacotes?: number | null
+          total_rotas?: number | null
+          total_shipments?: number | null
+          total_veiculos?: number | null
+          transportadora?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativada_em?: string | null
+          created_at?: string
+          data_operacional?: string
+          escala_jm_hora?: string | null
+          escala_jm_nome?: string | null
+          escala_jm_pacotes?: number | null
+          escala_jm_rotas?: number | null
+          escala_xpt_hora?: string | null
+          escala_xpt_nome?: string | null
+          escala_xpt_rotas?: number | null
+          escala_xpt_shipments?: number | null
+          facility?: string | null
+          id?: string
+          importado_por?: string | null
+          status?: Database["public"]["Enums"]["base_status"]
+          total_bairros?: number | null
+          total_cidades?: number | null
+          total_motoristas?: number | null
+          total_pacotes?: number | null
+          total_rotas?: number | null
+          total_shipments?: number | null
+          total_veiculos?: number | null
+          transportadora?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contagens: {
+        Row: {
+          base_id: string
+          created_at: string
+          data_operacional: string
+          divergencia: number
+          finalizada_em: string | null
+          id: string
+          iniciada_em: string
+          observacoes: string | null
+          total_contado: number
+          total_esperado: number
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          base_id: string
+          created_at?: string
+          data_operacional: string
+          divergencia?: number
+          finalizada_em?: string | null
+          id?: string
+          iniciada_em?: string
+          observacoes?: string | null
+          total_contado?: number
+          total_esperado?: number
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          base_id?: string
+          created_at?: string
+          data_operacional?: string
+          divergencia?: number
+          finalizada_em?: string | null
+          id?: string
+          iniciada_em?: string
+          observacoes?: string | null
+          total_contado?: number
+          total_esperado?: number
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contagens_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contagens_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contagens_rotas_lock: {
+        Row: {
+          base_id: string
+          criado_em: string
+          criado_por: string | null
+          data_operacional: string
+          id: string
+          motorista: string | null
+          nome: string
+          previsto: number | null
+        }
+        Insert: {
+          base_id: string
+          criado_em?: string
+          criado_por?: string | null
+          data_operacional: string
+          id?: string
+          motorista?: string | null
+          nome: string
+          previsto?: number | null
+        }
+        Update: {
+          base_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          data_operacional?: string
+          id?: string
+          motorista?: string | null
+          nome?: string
+          previsto?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contagens_rotas_lock_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      devolucoes: {
+        Row: {
+          base_id: string | null
+          base_operacional_id: string | null
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
+          created_at: string
+          devolvido_em: string
+          devolvido_por: string
+          escala_id: string | null
+          id: string
+          motivo: Database["public"]["Enums"]["motivo_devolucao"]
+          motorista: string | null
+          observacao: string | null
+          rota: string | null
+          shipment_codigo: string
+          updated_at: string
+        }
+        Insert: {
+          base_id?: string | null
+          base_operacional_id?: string | null
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          created_at?: string
+          devolvido_em?: string
+          devolvido_por?: string
+          escala_id?: string | null
+          id?: string
+          motivo: Database["public"]["Enums"]["motivo_devolucao"]
+          motorista?: string | null
+          observacao?: string | null
+          rota?: string | null
+          shipment_codigo: string
+          updated_at?: string
+        }
+        Update: {
+          base_id?: string | null
+          base_operacional_id?: string | null
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          created_at?: string
+          devolvido_em?: string
+          devolvido_por?: string
+          escala_id?: string | null
+          id?: string
+          motivo?: Database["public"]["Enums"]["motivo_devolucao"]
+          motorista?: string | null
+          observacao?: string | null
+          rota?: string | null
+          shipment_codigo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devolucoes_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "devolucoes_base_operacional_id_fkey"
+            columns: ["base_operacional_id"]
+            isOneToOne: false
+            referencedRelation: "bases_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "devolucoes_escala_id_fkey"
+            columns: ["escala_id"]
+            isOneToOne: false
+            referencedRelation: "escalas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalas: {
+        Row: {
+          bairro: string | null
+          base_id: string | null
+          base_operacional_id: string | null
+          cep: string | null
+          cidade: string | null
+          cluster: string | null
+          created_at: string
+          data_referencia: string
+          devolvido: boolean
+          devolvido_em: string | null
+          devolvido_motivo:
+            | Database["public"]["Enums"]["motivo_devolucao"]
+            | null
+          distancia: number | null
+          driver: string | null
+          duracao: number | null
+          facility_id: string | null
+          giro: string | null
+          id: string
+          importacao_id: string | null
+          importado_por: string | null
+          modal: string | null
+          nro_rota: string | null
+          numero: string | null
+          ocupacao: number | null
+          ordem: number | null
+          order_id_veiculo: string | null
+          otimizada: string | null
+          pacotes: number | null
+          parada: string | null
+          paradas: number | null
+          placa: string | null
+          placa_troca: string | null
+          planejada: string | null
+          recebido: boolean
+          recebido_em: string | null
+          recebido_por: string | null
+          referencias: string | null
+          roteiro: string | null
+          rua: string | null
+          shipment: string | null
+          spr: number | null
+          tipo: string | null
+          transportadora: string | null
+          triado: boolean
+          triado_em: string | null
+          triado_por: string | null
+          vaga: string | null
+        }
+        Insert: {
+          bairro?: string | null
+          base_id?: string | null
+          base_operacional_id?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cluster?: string | null
+          created_at?: string
+          data_referencia?: string
+          devolvido?: boolean
+          devolvido_em?: string | null
+          devolvido_motivo?:
+            | Database["public"]["Enums"]["motivo_devolucao"]
+            | null
+          distancia?: number | null
+          driver?: string | null
+          duracao?: number | null
+          facility_id?: string | null
+          giro?: string | null
+          id?: string
+          importacao_id?: string | null
+          importado_por?: string | null
+          modal?: string | null
+          nro_rota?: string | null
+          numero?: string | null
+          ocupacao?: number | null
+          ordem?: number | null
+          order_id_veiculo?: string | null
+          otimizada?: string | null
+          pacotes?: number | null
+          parada?: string | null
+          paradas?: number | null
+          placa?: string | null
+          placa_troca?: string | null
+          planejada?: string | null
+          recebido?: boolean
+          recebido_em?: string | null
+          recebido_por?: string | null
+          referencias?: string | null
+          roteiro?: string | null
+          rua?: string | null
+          shipment?: string | null
+          spr?: number | null
+          tipo?: string | null
+          transportadora?: string | null
+          triado?: boolean
+          triado_em?: string | null
+          triado_por?: string | null
+          vaga?: string | null
+        }
+        Update: {
+          bairro?: string | null
+          base_id?: string | null
+          base_operacional_id?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cluster?: string | null
+          created_at?: string
+          data_referencia?: string
+          devolvido?: boolean
+          devolvido_em?: string | null
+          devolvido_motivo?:
+            | Database["public"]["Enums"]["motivo_devolucao"]
+            | null
+          distancia?: number | null
+          driver?: string | null
+          duracao?: number | null
+          facility_id?: string | null
+          giro?: string | null
+          id?: string
+          importacao_id?: string | null
+          importado_por?: string | null
+          modal?: string | null
+          nro_rota?: string | null
+          numero?: string | null
+          ocupacao?: number | null
+          ordem?: number | null
+          order_id_veiculo?: string | null
+          otimizada?: string | null
+          pacotes?: number | null
+          parada?: string | null
+          paradas?: number | null
+          placa?: string | null
+          placa_troca?: string | null
+          planejada?: string | null
+          recebido?: boolean
+          recebido_em?: string | null
+          recebido_por?: string | null
+          referencias?: string | null
+          roteiro?: string | null
+          rua?: string | null
+          shipment?: string | null
+          spr?: number | null
+          tipo?: string | null
+          transportadora?: string | null
+          triado?: boolean
+          triado_em?: string | null
+          triado_por?: string | null
+          vaga?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalas_base_operacional_id_fkey"
+            columns: ["base_operacional_id"]
+            isOneToOne: false
+            referencedRelation: "bases_operacionais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalas_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "importacoes_escala"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      importacoes_escala: {
+        Row: {
+          arquivada_em: string | null
+          arquivada_por: string | null
+          arquivo_nome: string | null
+          ativa: boolean
+          base_id: string
+          created_at: string
+          data_operacional: string
+          id: string
+          importado_em: string
+          importado_por: string | null
+          total_linhas: number
+          total_motoristas: number
+          total_pacotes: number
+          total_rotas: number
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          arquivada_em?: string | null
+          arquivada_por?: string | null
+          arquivo_nome?: string | null
+          ativa?: boolean
+          base_id: string
+          created_at?: string
+          data_operacional: string
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          total_linhas?: number
+          total_motoristas?: number
+          total_pacotes?: number
+          total_rotas?: number
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          arquivada_em?: string | null
+          arquivada_por?: string | null
+          arquivo_nome?: string | null
+          ativa?: boolean
+          base_id?: string
+          created_at?: string
+          data_operacional?: string
+          id?: string
+          importado_em?: string
+          importado_por?: string | null
+          total_linhas?: number
+          total_motoristas?: number
+          total_pacotes?: number
+          total_rotas?: number
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importacoes_escala_arquivada_por_fkey"
+            columns: ["arquivada_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "importacoes_escala_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "importacoes_escala_importado_por_fkey"
+            columns: ["importado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventario_leituras: {
+        Row: {
+          base_id: string
+          bipado_em: string
+          bipado_por: string
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelamento_motivo: string | null
+          codigo: string
+          created_at: string
+          dia_operacional: string
+          id: string
+          inventario_id: string
+        }
+        Insert: {
+          base_id: string
+          bipado_em?: string
+          bipado_por: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo: string
+          created_at?: string
+          dia_operacional: string
+          id?: string
+          inventario_id: string
+        }
+        Update: {
+          base_id?: string
+          bipado_em?: string
+          bipado_por?: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo?: string
+          created_at?: string
+          dia_operacional?: string
+          id?: string
+          inventario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_leituras_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_leituras_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventarios: {
+        Row: {
+          base_id: string
+          cancelado_em: string | null
+          cancelado_por: string | null
+          cancelamento_motivo: string | null
+          created_at: string
+          criado_por: string
+          dia_operacional: string
+          finalizado_em: string | null
+          finalizado_por: string | null
+          id: string
+          observacao: string | null
+          responsavel: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          base_id: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          created_at?: string
+          criado_por: string
+          dia_operacional: string
+          finalizado_em?: string | null
+          finalizado_por?: string | null
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          base_id?: string
+          cancelado_em?: string | null
+          cancelado_por?: string | null
+          cancelamento_motivo?: string | null
+          created_at?: string
+          criado_por?: string
+          dia_operacional?: string
+          finalizado_em?: string | null
+          finalizado_por?: string | null
+          id?: string
+          observacao?: string | null
+          responsavel?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventarios_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motoristas: {
+        Row: {
+          ativo: boolean
+          base_id: string | null
+          cnh: string | null
+          cpf: string | null
+          created_at: string
+          id: string
+          nome: string
+          placa: string | null
+          transportadora: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          base_id?: string | null
+          cnh?: string | null
+          cpf?: string | null
+          created_at?: string
+          id?: string
+          nome: string
+          placa?: string | null
+          transportadora?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          base_id?: string | null
+          cnh?: string | null
+          cpf?: string | null
+          created_at?: string
+          id?: string
+          nome?: string
+          placa?: string | null
+          transportadora?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motoristas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          ativo: boolean
+          base_id: string | null
+          created_at: string
+          email: string
+          id: string
+          matricula: string | null
+          nome: string
+        }
+        Insert: {
+          ativo?: boolean
+          base_id?: string | null
+          created_at?: string
+          email: string
+          id: string
+          matricula?: string | null
+          nome: string
+        }
+        Update: {
+          ativo?: boolean
+          base_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          matricula?: string | null
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recebimentos: {
+        Row: {
+          base_id: string | null
+          codigo_bipado: string
+          created_at: string
+          data_operacional: string | null
+          id: string
+          ip: string | null
+          mensagem: string | null
+          operador_id: string
+          resultado: Database["public"]["Enums"]["recebimento_resultado"]
+          rota_id: string | null
+          stage: Database["public"]["Enums"]["bip_stage"]
+          tempo_desde_ultima_ms: number | null
+          user_agent: string | null
+          volume_id: string | null
+        }
+        Insert: {
+          base_id?: string | null
+          codigo_bipado: string
+          created_at?: string
+          data_operacional?: string | null
+          id?: string
+          ip?: string | null
+          mensagem?: string | null
+          operador_id: string
+          resultado: Database["public"]["Enums"]["recebimento_resultado"]
+          rota_id?: string | null
+          stage?: Database["public"]["Enums"]["bip_stage"]
+          tempo_desde_ultima_ms?: number | null
+          user_agent?: string | null
+          volume_id?: string | null
+        }
+        Update: {
+          base_id?: string | null
+          codigo_bipado?: string
+          created_at?: string
+          data_operacional?: string | null
+          id?: string
+          ip?: string | null
+          mensagem?: string | null
+          operador_id?: string
+          resultado?: Database["public"]["Enums"]["recebimento_resultado"]
+          rota_id?: string | null
+          stage?: Database["public"]["Enums"]["bip_stage"]
+          tempo_desde_ultima_ms?: number | null
+          user_agent?: string | null
+          volume_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recebimentos_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recebimentos_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recebimentos_volume_id_fkey"
+            columns: ["volume_id"]
+            isOneToOne: false
+            referencedRelation: "volumes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rotas: {
+        Row: {
+          base_id: string
+          base_origem_id: string | null
+          cidade: string
+          codigo: string
+          created_at: string
+          data_expedicao: string
+          data_prevista: string | null
+          destinatario_cep: string | null
+          destinatario_complemento: string | null
+          destinatario_endereco: string | null
+          destinatario_nome: string | null
+          id: string
+          janela_despacho: string | null
+          motorista_id: string | null
+          nf: string | null
+          pack_id: string | null
+          quantidade_prevista: number
+          rota_final: string | null
+          status: Database["public"]["Enums"]["rota_status"]
+          transportadora: string | null
+          updated_at: string
+        }
+        Insert: {
+          base_id: string
+          base_origem_id?: string | null
+          cidade: string
+          codigo: string
+          created_at?: string
+          data_expedicao?: string
+          data_prevista?: string | null
+          destinatario_cep?: string | null
+          destinatario_complemento?: string | null
+          destinatario_endereco?: string | null
+          destinatario_nome?: string | null
+          id?: string
+          janela_despacho?: string | null
+          motorista_id?: string | null
+          nf?: string | null
+          pack_id?: string | null
+          quantidade_prevista?: number
+          rota_final?: string | null
+          status?: Database["public"]["Enums"]["rota_status"]
+          transportadora?: string | null
+          updated_at?: string
+        }
+        Update: {
+          base_id?: string
+          base_origem_id?: string | null
+          cidade?: string
+          codigo?: string
+          created_at?: string
+          data_expedicao?: string
+          data_prevista?: string | null
+          destinatario_cep?: string | null
+          destinatario_complemento?: string | null
+          destinatario_endereco?: string | null
+          destinatario_nome?: string | null
+          id?: string
+          janela_despacho?: string | null
+          motorista_id?: string | null
+          nf?: string | null
+          pack_id?: string | null
+          quantidade_prevista?: number
+          rota_final?: string | null
+          status?: Database["public"]["Enums"]["rota_status"]
+          transportadora?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rotas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rotas_base_origem_id_fkey"
+            columns: ["base_origem_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rotas_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rotas_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shipments: {
+        Row: {
+          bairro: string | null
+          base_operacional_id: string
+          cidade: string | null
+          created_at: string
+          id: string
+          motorista: string | null
+          pacotes: number | null
+          placa: string | null
+          rota: string | null
+          shipment_id: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          bairro?: string | null
+          base_operacional_id: string
+          cidade?: string | null
+          created_at?: string
+          id?: string
+          motorista?: string | null
+          pacotes?: number | null
+          placa?: string | null
+          rota?: string | null
+          shipment_id: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bairro?: string | null
+          base_operacional_id?: string
+          cidade?: string | null
+          created_at?: string
+          id?: string
+          motorista?: string | null
+          pacotes?: number | null
+          placa?: string | null
+          rota?: string | null
+          shipment_id?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shipments_base_operacional_id_fkey"
+            columns: ["base_operacional_id"]
+            isOneToOne: false
+            referencedRelation: "bases_operacionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencia_eventos: {
+        Row: {
+          created_at: string
+          etapa: string
+          id: string
+          latitude: number | null
+          localizacao_texto: string | null
+          longitude: number | null
+          minutos_atraso: number
+          ocorrido_em: string
+          registrado_por: string
+          transferencia_id: string
+        }
+        Insert: {
+          created_at?: string
+          etapa: string
+          id?: string
+          latitude?: number | null
+          localizacao_texto?: string | null
+          longitude?: number | null
+          minutos_atraso?: number
+          ocorrido_em: string
+          registrado_por: string
+          transferencia_id: string
+        }
+        Update: {
+          created_at?: string
+          etapa?: string
+          id?: string
+          latitude?: number | null
+          localizacao_texto?: string | null
+          longitude?: number | null
+          minutos_atraso?: number
+          ocorrido_em?: string
+          registrado_por?: string
+          transferencia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_eventos_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencia_evidencias: {
+        Row: {
+          created_at: string
+          enviado_por: string
+          etapa: string
+          evento_id: string
+          horario_evidencia: string | null
+          id: string
+          localizacao_texto: string | null
+          rejeicao_motivo: string | null
+          status: string
+          storage_path: string | null
+          substituida_por: string | null
+          timemark_url: string | null
+          transferencia_id: string
+          validado_em: string | null
+          validado_por: string | null
+        }
+        Insert: {
+          created_at?: string
+          enviado_por: string
+          etapa: string
+          evento_id: string
+          horario_evidencia?: string | null
+          id?: string
+          localizacao_texto?: string | null
+          rejeicao_motivo?: string | null
+          status?: string
+          storage_path?: string | null
+          substituida_por?: string | null
+          timemark_url?: string | null
+          transferencia_id: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Update: {
+          created_at?: string
+          enviado_por?: string
+          etapa?: string
+          evento_id?: string
+          horario_evidencia?: string | null
+          id?: string
+          localizacao_texto?: string | null
+          rejeicao_motivo?: string | null
+          status?: string
+          storage_path?: string | null
+          substituida_por?: string | null
+          timemark_url?: string | null
+          transferencia_id?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_evidencias_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_evidencias_substituida_por_fkey"
+            columns: ["substituida_por"]
+            isOneToOne: false
+            referencedRelation: "transferencia_evidencias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_evidencias_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencia_motivos: {
+        Row: {
+          ativo: boolean
+          codigo: string
+          created_at: string
+          etapa: string | null
+          exige_descricao: boolean
+          id: string
+          nome: string
+          ordem: number
+          responsabilidade: string
+        }
+        Insert: {
+          ativo?: boolean
+          codigo: string
+          created_at?: string
+          etapa?: string | null
+          exige_descricao?: boolean
+          id?: string
+          nome: string
+          ordem?: number
+          responsabilidade: string
+        }
+        Update: {
+          ativo?: boolean
+          codigo?: string
+          created_at?: string
+          etapa?: string | null
+          exige_descricao?: boolean
+          id?: string
+          nome?: string
+          ordem?: number
+          responsabilidade?: string
+        }
+        Relationships: []
+      }
+      transferencia_ocorrencias: {
+        Row: {
+          created_at: string
+          etapa: string
+          evento_id: string
+          id: string
+          minutos_atraso: number
+          motivo_id: string | null
+          observacao: string | null
+          registrado_por: string
+          responsabilidade: string
+          transferencia_id: string
+        }
+        Insert: {
+          created_at?: string
+          etapa: string
+          evento_id: string
+          id?: string
+          minutos_atraso?: number
+          motivo_id?: string | null
+          observacao?: string | null
+          registrado_por: string
+          responsabilidade: string
+          transferencia_id: string
+        }
+        Update: {
+          created_at?: string
+          etapa?: string
+          evento_id?: string
+          id?: string
+          minutos_atraso?: number
+          motivo_id?: string | null
+          observacao?: string | null
+          registrado_por?: string
+          responsabilidade?: string
+          transferencia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_ocorrencias_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_ocorrencias_motivo_id_fkey"
+            columns: ["motivo_id"]
+            isOneToOne: false
+            referencedRelation: "transferencia_motivos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencia_ocorrencias_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencia_slas: {
+        Row: {
+          ativo: boolean
+          base_id: string
+          chegada_service_limite: string
+          created_at: string
+          id: string
+          saida_service_limite: string
+          service: string
+          transito_max_minutos: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          base_id: string
+          chegada_service_limite?: string
+          created_at?: string
+          id?: string
+          saida_service_limite?: string
+          service: string
+          transito_max_minutos?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          base_id?: string
+          chegada_service_limite?: string
+          created_at?: string
+          id?: string
+          saida_service_limite?: string
+          service?: string
+          transito_max_minutos?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencia_slas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transferencias: {
+        Row: {
+          base_id: string
+          cancelada_em: string | null
+          cancelada_por: string | null
+          cancelamento_motivo: string | null
+          codigo: string
+          created_at: string
+          criado_por: string
+          data_operacional: string
+          finalizada_em: string | null
+          id: string
+          motorista: string
+          observacao: string | null
+          placa: string
+          service: string
+          status: string
+          tipo_veiculo: string | null
+          updated_at: string
+        }
+        Insert: {
+          base_id: string
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo: string
+          created_at?: string
+          criado_por: string
+          data_operacional: string
+          finalizada_em?: string | null
+          id?: string
+          motorista: string
+          observacao?: string | null
+          placa: string
+          service: string
+          status?: string
+          tipo_veiculo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          base_id?: string
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cancelamento_motivo?: string | null
+          codigo?: string
+          created_at?: string
+          criado_por?: string
+          data_operacional?: string
+          finalizada_em?: string | null
+          id?: string
+          motorista?: string
+          observacao?: string | null
+          placa?: string
+          service?: string
+          status?: string
+          tipo_veiculo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_bases: {
+        Row: {
+          base_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          base_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          base_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_bases_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      volumes: {
+        Row: {
+          base_id: string | null
+          codigo: string
+          contagem_id: string | null
+          created_at: string
+          data_operacional: string | null
+          id: string
+          recebido: boolean
+          recebido_em: string | null
+          recebido_por: string | null
+          rota_id: string
+          sequencia: number
+          total: number
+          triado: boolean
+          triado_em: string | null
+          triado_por: string | null
+        }
+        Insert: {
+          base_id?: string | null
+          codigo: string
+          contagem_id?: string | null
+          created_at?: string
+          data_operacional?: string | null
+          id?: string
+          recebido?: boolean
+          recebido_em?: string | null
+          recebido_por?: string | null
+          rota_id: string
+          sequencia: number
+          total: number
+          triado?: boolean
+          triado_em?: string | null
+          triado_por?: string | null
+        }
+        Update: {
+          base_id?: string | null
+          codigo?: string
+          contagem_id?: string | null
+          created_at?: string
+          data_operacional?: string | null
+          id?: string
+          recebido?: boolean
+          recebido_em?: string | null
+          recebido_por?: string | null
+          rota_id?: string
+          sequencia?: number
+          total?: number
+          triado?: boolean
+          triado_em?: string | null
+          triado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volumes_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volumes_contagem_id_fkey"
+            columns: ["contagem_id"]
+            isOneToOne: false
+            referencedRelation: "contagens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "volumes_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      motoristas_safe: {
+        Row: {
+          ativo: boolean | null
+          base_id: string | null
+          created_at: string | null
+          id: string | null
+          nome: string | null
+          placa: string | null
+          transportadora: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          base_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          placa?: string | null
+          transportadora?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          base_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          nome?: string | null
+          placa?: string | null
+          transportadora?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motoristas_base_id_fkey"
+            columns: ["base_id"]
+            isOneToOne: false
+            referencedRelation: "bases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      anexar_evidencia_transferencia: {
+        Args: {
+          p_etapa: string
+          p_horario_evidencia?: string
+          p_localizacao_texto?: string
+          p_storage_path: string
+          p_timemark_url: string
+          p_transferencia_id: string
+        }
+        Returns: Json
+      }
+      cancelar_transferencia: {
+        Args: { p_justificativa: string; p_transferencia_id: string }
+        Returns: Json
+      }
+      criar_transferencia: {
+        Args: {
+          p_base_id: string
+          p_data_operacional: string
+          p_motorista: string
+          p_observacao?: string
+          p_placa: string
+          p_service: string
+          p_tipo_veiculo?: string
+        }
+        Returns: Json
+      }
+      finalizar_inventario: {
+        Args: { p_inventario_id: string; p_observacao?: string }
+        Returns: Json
+      }
+      get_allowed_bases: { Args: { _user_id: string }; Returns: string[] }
+      has_base_access: {
+        Args: { _base_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      inventario_base_access: {
+        Args: { _base_id: string; _user_id: string }
+        Returns: boolean
+      }
+      inventario_global_access: { Args: { _user_id: string }; Returns: boolean }
+      registrar_evento_transferencia: {
+        Args: {
+          p_etapa: string
+          p_horario_evidencia?: string
+          p_localizacao_texto?: string
+          p_motivo_codigo?: string
+          p_observacao?: string
+          p_ocorrido_em: string
+          p_responsabilidade?: string
+          p_storage_path?: string
+          p_timemark_url?: string
+          p_transferencia_id: string
+        }
+        Returns: Json
+      }
+      registrar_leitura_inventario: {
+        Args: {
+          p_base_id: string
+          p_codigo: string
+          p_dia_operacional: string
+          p_observacao?: string
+          p_responsavel?: string
+        }
+        Returns: Json
+      }
+      salvar_sla_transferencia: {
+        Args: {
+          p_base_id: string
+          p_chegada_service_limite: string
+          p_saida_service_limite: string
+          p_service: string
+          p_transito_max_minutos: number
+        }
+        Returns: Json
+      }
+      transferencia_access: {
+        Args: { _transferencia_id: string; _user_id: string }
+        Returns: boolean
+      }
+      transferencia_base_access: {
+        Args: { _base_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "supervisor" | "operador" | "gerente"
+      base_status: "aguardando" | "ativa" | "arquivada" | "erro"
+      bip_stage: "recebimento" | "triagem"
+      motivo_devolucao:
+        | "cliente_ausente"
+        | "endereco_nao_localizado"
+        | "recusado"
+        | "avaria"
+        | "zona_de_risco"
+        | "outros"
+        | "comercio_fechado"
+      recebimento_resultado:
+        | "ok"
+        | "duplicado"
+        | "inexistente"
+        | "outra_rota"
+        | "outra_base"
+        | "cancelada"
+        | "encerrada"
+        | "volume_repetido"
+      rota_status:
+        | "pendente"
+        | "em_recebimento"
+        | "recebida_parcial"
+        | "recebida_completa"
+        | "cancelada"
+        | "encerrada"
+        | "em_triagem"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +1764,38 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "supervisor", "operador", "gerente"],
+      base_status: ["aguardando", "ativa", "arquivada", "erro"],
+      bip_stage: ["recebimento", "triagem"],
+      motivo_devolucao: [
+        "cliente_ausente",
+        "endereco_nao_localizado",
+        "recusado",
+        "avaria",
+        "zona_de_risco",
+        "outros",
+        "comercio_fechado",
+      ],
+      recebimento_resultado: [
+        "ok",
+        "duplicado",
+        "inexistente",
+        "outra_rota",
+        "outra_base",
+        "cancelada",
+        "encerrada",
+        "volume_repetido",
+      ],
+      rota_status: [
+        "pendente",
+        "em_recebimento",
+        "recebida_parcial",
+        "recebida_completa",
+        "cancelada",
+        "encerrada",
+        "em_triagem",
+      ],
+    },
   },
 } as const
