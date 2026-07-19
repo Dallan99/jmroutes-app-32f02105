@@ -69,10 +69,11 @@ describe("Transferências — fluxo operacional", () => {
   });
 
   it("mantém as três primeiras etapas funcionando enquanto a função v2 não está no banco", () => {
-    expect(loteSource).toContain('rpc("registrar_evento_transferencia"');
+    expect(loteSource).toContain('rpc as any)("registrar_evento_transferencia"');
     expect(loteSource).toContain('data.etapa !== "saida_xpt"');
     expect(readFileSync(resolve(process.cwd(), "src/lib/transferencias.functions.ts"), "utf8")).toContain("As três etapas anteriores continuam disponíveis");
   });
+
 
   it("prioriza no gerencial a disponibilidade da JM e a espera por carga no Service", () => {
     expect(gerencialSource).toContain("disponibilizados_ate_7");
@@ -107,33 +108,34 @@ describe("Transferências — saída do XPT", () => {
 });
 
 describe("Transferências — operação inline", () => {
-  it("mostra o Service da base e cria quantas linhas de rota forem necessárias", () => {
+  it("mostra o Service da base e permite criar novas transferências", () => {
     expect(pageSource).toContain("serviceBase ? (");
-    expect(pageSource).toContain("Nova rota");
-    expect(pageSource).toContain("[...atual, novoRascunho");
-    expect(pageSource).toContain("RascunhoRotaRow");
+    expect(pageSource).toContain("Nova Transferência");
+    expect(pageSource).toContain("NovaTransferenciaDialog");
   });
 
-  it("mantém edição, exclusão, conclusão e marcos dentro da tabela", () => {
-    expect(pageSource).toContain("EditarRotaRow");
-    expect(pageSource).toContain("EtapaFormCells");
-    expect(pageSource).toContain("Link TimeMark ou evidência");
+  it("mantém edição, exclusão, conclusão e registro de etapas no módulo", () => {
+    expect(pageSource).toContain("EditarTransferenciaDialog");
+    expect(pageSource).toContain("EtapaForm");
+    expect(pageSource).toContain("Link TimeMark");
     expect(pageSource).toContain('type="file"');
-    expect(pageSource).toContain("Salvar etapa");
-    expect(pageSource).toContain("Editar etapa");
+    expect(pageSource).toContain("Registrar etapa");
     expect(pageSource).toContain("Salvar correção");
     expect(pageSource).toContain("timemarkUrl: timemark");
     expect(pageSource).toContain("storagePath");
-    expect(pageSource).toContain('title="Excluir rota"');
-    expect(pageSource).toContain('title={proxima === "saida_xpt" ? "Concluir transferência"');
+    expect(pageSource).toContain('title="Excluir (admin)"');
+    expect(pageSource).toContain('proximaEtapa(t.eventos) === "saida_xpt"');
   });
 
-  it("destaca a prova de espera por carga e mantém o deslocamento como complementar", () => {
-    expect(pageSource).toContain("Disponibilizados até 07h");
-    expect(pageSource).toContain("Tempo aguardando carga");
-    expect(pageSource).toContain("Saídas após 09h (MELI)");
-    expect(pageSource).toContain("deslocamento até o XPT continua registrado como dado complementar");
+  it("expõe KPIs operacionais e o tempo aguardando carga como indicador principal", () => {
+    expect(pageSource).toContain("Em andamento");
+    expect(pageSource).toContain("Aguardando carga");
+    expect(pageSource).toContain("Tempo médio aguardando");
+    expect(pageSource).toContain("Maior tempo aguardando");
+    expect(pageSource).toContain("TempoAguardandoCarga");
+    expect(pageSource).toContain("corAguardando");
   });
+
 
   it("audita a correção da etapa e impede quebra da ordem cronológica", () => {
     const funcoes = readFileSync(resolve(process.cwd(), "src/lib/transferencias.functions.ts"), "utf8");
