@@ -1,3 +1,5 @@
+import jmLogo from "@/assets/jm-logo.jpeg.asset.json";
+
 export function JmLogo({
   size = 36,
   className,
@@ -7,11 +9,14 @@ export function JmLogo({
 }) {
   return (
     <img
-      src="/jm-logo.jpeg"
+      src={jmLogo.url}
       alt="JM Transportes"
       width={size}
       height={size}
       className={className}
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).style.display = "none";
+      }}
       style={{
         borderRadius: 6,
         objectFit: "contain",
