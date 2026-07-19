@@ -1,3 +1,5 @@
+const LOGO_URL = "/__l5e/assets-v1/13f07280-903f-4674-bc0d-0b29af8f7a51/jm-logo.jpeg";
+
 export function JmLogo({
   size = 36,
   className,
@@ -6,26 +8,17 @@ export function JmLogo({
   className?: string;
 }) {
   return (
-    <div
-      aria-label="JM Transportes"
+    <img
+      src={LOGO_URL}
+      alt="JM Transportes"
+      width={size}
+      height={size}
       className={className}
       style={{
-        width: size,
-        height: size,
         borderRadius: 6,
-        background: "linear-gradient(135deg, #f59e0b, #b45309)",
-        color: "white",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 800,
-        fontSize: size * 0.42,
-        letterSpacing: "-0.03em",
-        fontFamily: "system-ui, sans-serif",
+        objectFit: "contain",
       }}
-    >
-      JM
-    </div>
+    />
   );
 }
 

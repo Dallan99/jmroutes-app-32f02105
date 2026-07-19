@@ -19,8 +19,12 @@ const ATALHOS = [
 function InicioPage() {
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-      <section className="relative overflow-hidden rounded-2xl border bg-card h-56 md:h-72">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/30 via-background to-background" />
+      <section className="relative overflow-hidden rounded-2xl border bg-card">
+        <img
+          src="/__l5e/assets-v1/49cb86eb-5372-47f1-aa79-869f502baca5/jm-hero.png"
+          alt="Frota JM Transportes"
+          className="w-full h-56 md:h-72 object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/70 to-transparent" />
         <div className="absolute inset-0 flex items-center px-6 md:px-10">
           <div className="max-w-xl space-y-3">
