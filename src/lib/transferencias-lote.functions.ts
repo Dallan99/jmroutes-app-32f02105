@@ -41,7 +41,7 @@ export const criarTransferenciasLote = createServerFn({ method: "POST" })
 
     for (const linha of data.linhas) {
       const referencia = `${linha.placa.toUpperCase()} · ${linha.motorista}`;
-      const { data: result, error } = await context.supabase.rpc("criar_transferencia", {
+      const { data: result, error } = await (context.supabase.rpc as any)("criar_transferencia", {
         p_base_id: data.baseId,
         p_data_operacional: data.dataOperacional,
         p_service: linha.service,
@@ -90,7 +90,7 @@ export const registrarMarcosTransferenciaLote = createServerFn({ method: "POST" 
         ? `${transferencia.codigo} · ${transferencia.placa} · ${transferencia.motorista}`
         : transferenciaId;
 
-      let { error } = await context.supabase.rpc("registrar_evento_transferencia_v2", {
+      let { error } = await (context.supabase.rpc as any)("registrar_evento_transferencia_v2", {
         p_transferencia_id: transferenciaId,
         p_etapa: data.etapa,
         p_ocorrido_em: data.ocorridoEm,
@@ -105,7 +105,7 @@ export const registrarMarcosTransferenciaLote = createServerFn({ method: "POST" 
 
       const v2Ausente = error?.code === "PGRST202" || error?.message.includes("registrar_evento_transferencia_v2");
       if (v2Ausente && data.etapa !== "saida_xpt") {
-        const legado = await context.supabase.rpc("registrar_evento_transferencia", {
+        const legado = await (context.supabase.rpc as any)("registrar_evento_transferencia", {
           p_transferencia_id: transferenciaId,
           p_etapa: data.etapa,
           p_ocorrido_em: data.ocorridoEm,
@@ -119,7 +119,7 @@ export const registrarMarcosTransferenciaLote = createServerFn({ method: "POST" 
         });
         error = legado.error;
       } else if (v2Ausente && data.etapa === "saida_xpt") {
-        error = { ...error, message: "A etapa Saída do XPT aguarda a atualização do banco." };
+        error = { ...(error as any), message: "A etapa Saída do XPT aguarda a atualização do banco." } as any;
       }
 
       detalhes.push({

@@ -116,7 +116,7 @@ export const listarInventarioCentral = createServerFn({ method: "POST" })
     }
 
     const totalPorInventario = new Map<string, number>();
-    for (const l of leituras.filter((x) => !x.cancelado)) {
+    for (const l of leituras.filter((x: InventarioCentralLinha) => !x.cancelado)) {
       totalPorInventario.set(l.inventario_id, (totalPorInventario.get(l.inventario_id) ?? 0) + 1);
     }
 
