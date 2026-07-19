@@ -694,7 +694,12 @@ function LinhaExpandida({
     <div className="grid lg:grid-cols-2 gap-4">
       <div className="space-y-4">
         <RotasManager transferencia={transferencia} editarFn={editarFn} onSalvo={onSalvo} />
-        <TimelineHistorico transferencia={transferencia} />
+        <TimelineHistorico
+          transferencia={transferencia}
+          marcoFn={marcoFn}
+          corrigirMarcoFn={corrigirMarcoFn}
+          onSalvo={onSalvo}
+        />
       </div>
       <div className="space-y-4">
         <ProximaEtapaForm
@@ -879,7 +884,19 @@ function RotasManager({
 // ============================================================
 // Timeline histórico
 // ============================================================
-function TimelineHistorico({ transferencia }: { transferencia: TransferenciaDetalhe }) {
+function TimelineHistorico({
+  transferencia,
+  marcoFn,
+  corrigirMarcoFn,
+  onSalvo,
+}: {
+  transferencia: TransferenciaDetalhe;
+  marcoFn: ReturnType<typeof useServerFn<typeof registrarMarcoTransferencia>>;
+  corrigirMarcoFn: ReturnType<typeof useServerFn<typeof corrigirMarcoTransferencia>>;
+  onSalvo: () => void;
+}) {
+  const [editandoEtapa, setEditandoEtapa] = useState<TransferenciaEtapa | null>(null);
+
   return (
     <Card className="p-4">
       <h3 className="font-semibold text-sm mb-3">Histórico</h3>
@@ -887,6 +904,7 @@ function TimelineHistorico({ transferencia }: { transferencia: TransferenciaDeta
         {TRANSFERENCIA_ETAPAS.map((etapa) => {
           const ev = eventoDe(transferencia, etapa.value);
           const ocorrencia = transferencia.ocorrencias.find((o) => o.etapa === etapa.value);
+          const emEdicao = editandoEtapa === etapa.value;
           return (
             <li key={etapa.value} className="ml-4">
               <span
@@ -896,26 +914,57 @@ function TimelineHistorico({ transferencia }: { transferencia: TransferenciaDeta
               />
               <div className="flex items-baseline justify-between gap-2">
                 <b className="text-sm">{etapa.label}</b>
-                <span className="text-xs text-muted-foreground">
-                  {ev
-                    ? new Date(ev.ocorrido_em).toLocaleString("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })
-                    : "Pendente"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {ev
+                      ? new Date(ev.ocorrido_em).toLocaleString("pt-BR", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })
+                      : "Pendente"}
+                  </span>
+                  {ev && !emEdicao && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title={`Editar ${etapa.label}`}
+                      onClick={() => setEditandoEtapa(etapa.value)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
-              {ev?.localizacao_texto && (
+              {ev?.localizacao_texto && !emEdicao && (
                 <div className="text-xs text-muted-foreground">📍 {ev.localizacao_texto}</div>
               )}
-              {ev && ev.minutos_atraso > 0 && (
-                <div className="text-xs text-amber-600">
-                  Atraso: {duracao(ev.minutos_atraso)}
-                </div>
+              {ev && ev.minutos_atraso > 0 && !emEdicao && (
+                <div className="text-xs text-amber-600">Atraso: {duracao(ev.minutos_atraso)}</div>
               )}
-              {ocorrencia?.observacao && (
+              {ocorrencia?.observacao && !emEdicao && (
                 <div className="text-xs text-muted-foreground italic">
                   {ocorrencia.observacao}
+                </div>
+              )}
+              {emEdicao && (
+                <div className="mt-2 rounded-md border bg-muted/20 p-3">
+                  <EtapaForm
+                    transferencia={transferencia}
+                    etapa={etapa.value}
+                    modoCorrigir
+                    marcoFn={marcoFn}
+                    corrigirMarcoFn={corrigirMarcoFn}
+                    onSalvo={() => {
+                      setEditandoEtapa(null);
+                      onSalvo();
+                    }}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setEditandoEtapa(null)}>
+                      <X className="w-3 h-3 mr-1" /> Cancelar
+                    </Button>
+                  </div>
                 </div>
               )}
             </li>
