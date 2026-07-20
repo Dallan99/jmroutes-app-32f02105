@@ -681,7 +681,7 @@ function TriagemPage() {
               label="Meus hoje"
               value={(resumo.data?.meusHoje ?? 0).toLocaleString("pt-BR")}
             />
-            <Kpi icon={Timer} label="Tempo da sessão" value={`${hh}:${mm}:${ss}`} />
+            
           </div>
           <Progress value={pct} className="h-2" />
 

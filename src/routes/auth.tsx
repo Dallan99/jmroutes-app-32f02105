@@ -35,8 +35,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import heroImg from "@/assets/jm-hero-clean.jpg.asset.json";
-import logoImg from "@/assets/jm-logotipo.jpeg.asset.json";
+import heroImg from "@/assets/jm-hero.png.asset.json";
+import logoImg from "@/assets/jm-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
