@@ -184,6 +184,7 @@ function TriagemPage() {
   );
   const [dialogRessalvaAberto, setDialogRessalvaAberto] = useState(false);
   const [motivoRessalva, setMotivoRessalva] = useState("");
+  const [bloqueioErro, setBloqueioErro] = useState<string | null>(null);
 
   const detalheQuery = useQuery({
     queryKey: ["triagem-pendentes", baseId, dataOperacional, rotaDetalhe],
