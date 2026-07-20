@@ -684,6 +684,14 @@ function TriagemPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <ErroBloqueioOverlay
+        mensagem={bloqueioErro}
+        onOk={() => {
+          setBloqueioErro(null);
+          setCodigo("");
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
+      />
       {!modoRota ? (
         <>
           {/* KPIs gerais */}
