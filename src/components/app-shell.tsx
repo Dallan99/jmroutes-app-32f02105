@@ -109,16 +109,17 @@ export function AppShell() {
     queryFn: () => fetchPerfil(),
     staleTime: 60_000,
   });
-  const roles = (perfilQuery.data?.roles ?? ["operador"]) as Array<Role>;
+  const rolesCarregadas = perfilQuery.isSuccess;
+  const roles = (perfilQuery.data?.roles ?? []) as Array<Role>;
   useInactivityLogout();
 
   return (
     <BaseOperacionalProvider>
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar roles={roles} />
+          <AppSidebar roles={roles} rolesCarregadas={rolesCarregadas} />
           <div className="flex-1 flex flex-col min-w-0">
-            <TopBar nome={perfilQuery.data?.profile?.nome ?? null} roles={roles} />
+            <TopBar nome={perfilQuery.data?.profile?.nome ?? null} roles={roles} rolesCarregadas={rolesCarregadas} />
             <main className="flex-1 min-w-0">
               <Outlet />
             </main>
@@ -129,7 +130,8 @@ export function AppShell() {
   );
 }
 
-function AppSidebar({ roles }: { roles: Array<Role> }) {
+function AppSidebar({ roles, rolesCarregadas }: { roles: Array<Role>; rolesCarregadas: boolean }) {
+
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -188,9 +190,13 @@ function AppSidebar({ roles }: { roles: Array<Role> }) {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Operação", NAV_OPERACIONAL)}
-        {renderGroup("Gestão", NAV_GESTAO)}
-        {renderGroup("Administração", NAV_ADMIN)}
+        {rolesCarregadas && (
+          <>
+            {renderGroup("Operação", NAV_OPERACIONAL)}
+            {renderGroup("Gestão", NAV_GESTAO)}
+            {renderGroup("Administração", NAV_ADMIN)}
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         {!collapsed && <div className="text-[10px] text-sidebar-foreground/50 px-2 py-1">v1.0 · Iteração 1</div>}
@@ -199,7 +205,8 @@ function AppSidebar({ roles }: { roles: Array<Role> }) {
   );
 }
 
-function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
+function TopBar({ nome, roles, rolesCarregadas }: { nome: string | null; roles: string[]; rolesCarregadas: boolean }) {
+
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { base, diaOperacional, limpar } = useBaseOperacional();
@@ -233,7 +240,7 @@ function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
         <div className="text-right leading-tight">
           <div className="text-sm font-medium">{nome ?? "—"}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {principal}
+            {rolesCarregadas ? principal : "—"}
             {base && diaOperacional && (
               <>
                 {" · "}
@@ -241,6 +248,7 @@ function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
               </>
             )}
           </div>
+
         </div>
         <div className="w-8 h-8 rounded-full brand-gradient text-white flex items-center justify-center text-xs font-bold uppercase">{(nome ?? "?").slice(0, 2)}</div>
         <Button variant="ghost" size="icon" onClick={logout} title="Sair">
