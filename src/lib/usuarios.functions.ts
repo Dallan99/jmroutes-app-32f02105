@@ -47,30 +47,61 @@ export const listarUsuarios = createServerFn({ method: "GET" })
       rolesByUser.set(r.user_id, arr);
     }
 
-    // Buscar last_sign_in_at via admin listUsers (paginação simples até 1000)
+    const profilesById = new Map<string, any>();
+    for (const p of profiles ?? []) profilesById.set(p.id, p);
+
+    // Auth é a fonte primária da lista: se o profile não existir, o usuário ainda aparece.
+    const authUsers: any[] = [];
     const lastByUser = new Map<string, string | null>();
     let page = 1;
     for (;;) {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
       if (error) break;
-      for (const u of data.users) lastByUser.set(u.id, u.last_sign_in_at ?? null);
+      for (const u of data.users) {
+        authUsers.push(u);
+        lastByUser.set(u.id, u.last_sign_in_at ?? null);
+      }
       if (data.users.length < 200) break;
       page++;
       if (page > 10) break;
     }
 
-    return (profiles ?? []).map((p: any) => ({
-      id: p.id,
-      email: p.email,
-      nome: p.nome,
-      matricula: p.matricula,
-      base_id: p.base_id,
-      base_nome: p.bases?.nome ?? null,
-      ativo: p.ativo,
-      roles: rolesByUser.get(p.id) ?? [],
-      last_sign_in_at: lastByUser.get(p.id) ?? null,
-      created_at: p.created_at,
-    }));
+    const merged = new Map<string, UsuarioRow>();
+    for (const u of authUsers) {
+      const p = profilesById.get(u.id);
+      const metadataNome = typeof u.user_metadata?.nome === "string" ? u.user_metadata.nome : null;
+      const email = p?.email ?? u.email ?? "";
+      merged.set(u.id, {
+        id: u.id,
+        email,
+        nome: p?.nome ?? metadataNome ?? email.split("@")[0] ?? "Usuário",
+        matricula: p?.matricula ?? null,
+        base_id: p?.base_id ?? null,
+        base_nome: p?.bases?.nome ?? null,
+        ativo: p?.ativo ?? !u.banned_until,
+        roles: rolesByUser.get(u.id) ?? [],
+        last_sign_in_at: u.last_sign_in_at ?? null,
+        created_at: p?.created_at ?? u.created_at,
+      });
+    }
+
+    for (const p of profiles ?? []) {
+      if (merged.has(p.id)) continue;
+      merged.set(p.id, {
+        id: p.id,
+        email: p.email,
+        nome: p.nome,
+        matricula: p.matricula,
+        base_id: p.base_id,
+        base_nome: p.bases?.nome ?? null,
+        ativo: p.ativo,
+        roles: rolesByUser.get(p.id) ?? [],
+        last_sign_in_at: lastByUser.get(p.id) ?? null,
+        created_at: p.created_at,
+      });
+    }
+
+    return Array.from(merged.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
   });
 
 const criarSchema = z.object({
