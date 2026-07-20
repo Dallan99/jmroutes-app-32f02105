@@ -114,10 +114,13 @@ function DevolucoesPage() {
   const [obs, setObs] = useState("");
   const [rotaSessao, setRotaSessao] = useState("");
   const [rotaInput, setRotaInput] = useState("");
+  const [modoRapido, setModoRapido] = useState(false);
+  const [motivoPadrao, setMotivoPadrao] = useState<MotivoDevolucao>("outros");
   const [ultimo, setUltimo] = useState<RegistrarDevolucaoResult | null>(null);
   const [diaHistorico, setDiaHistorico] = useState<string>(diaOperacional ?? "");
   const diaAtivo = diaHistorico || diaOperacional;
   const consultandoHoje = diaAtivo === diaOperacional;
+  const rotaTravada = rotaSessao.trim().length > 0;
 
   const lista = useQuery({
     queryKey: ["devolucoes", base?.id, diaAtivo],
