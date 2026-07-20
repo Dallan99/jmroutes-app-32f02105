@@ -168,6 +168,7 @@ function TriagemPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const lastRef = useRef<{ codigo: string; ts: number } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoAjusteDiaRef = useRef<string | null>(null);
   const [codigo, setCodigo] = useState("");
   const [session, setSession] = useState<PersistedSession>(defaultSession);
   const [hydrated, setHydrated] = useState(false);
@@ -662,6 +663,21 @@ function TriagemPage() {
     resumo.data?.temImportacao === false &&
     !!ultimoDiaImportado &&
     ultimoDiaImportado.data_operacional !== dataOperacional;
+
+  useEffect(() => {
+    if (!diaSemImportacao || !ultimoDiaImportado) return;
+
+    const chave = `${baseId}:${dataOperacional}->${ultimoDiaImportado.data_operacional}`;
+    if (autoAjusteDiaRef.current === chave) return;
+
+    autoAjusteDiaRef.current = chave;
+    trocarDia(ultimoDiaImportado.data_operacional);
+    toast.info(
+      `Triagem ajustada para o último dia importado da base ${base?.codigo ?? ""}: ${new Date(
+        ultimoDiaImportado.data_operacional + "T00:00:00",
+      ).toLocaleDateString("pt-BR")}.`,
+    );
+  }, [base?.codigo, baseId, dataOperacional, diaSemImportacao, trocarDia, ultimoDiaImportado]);
 
 
   const flashClass = flash === "ok" ? "scan-flash-ok" : flash === "error" ? "scan-flash-error" : "";
