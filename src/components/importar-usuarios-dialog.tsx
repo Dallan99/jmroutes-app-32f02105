@@ -147,7 +147,7 @@ export function ImportarUsuariosDialog() {
         nome: get(idxs[0]),
         email: get(idxs[1]).toLowerCase(),
         role: (get(idxs[2]).toLowerCase() as Role) || ("operador" as Role),
-        base_codigo: get(idxs[3]).toUpperCase(),
+        base_codigo: normalizarBase(get(idxs[3])),
         matricula: get(idxs[4]),
         senha: get(idxs[5]) || gerarSenha(),
       };
