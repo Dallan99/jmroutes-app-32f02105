@@ -185,14 +185,14 @@ function TriagemPage() {
     queryKey: ["triagem-pendentes", baseId, dataOperacional, rotaDetalhe],
     queryFn: () => pendentesFn({ data: { baseId, dataOperacional, rota: rotaDetalhe! } }),
     enabled: !!rotaDetalhe,
-    refetchInterval: rotaDetalhe ? 5000 : false,
+    refetchInterval: rotaDetalhe ? 15000 : false,
   });
 
   const rotaOperacaoQuery = useQuery({
     queryKey: ["triagem-rota-operacao", baseId, dataOperacional, rotaSelecionada],
     queryFn: () => pendentesFn({ data: { baseId, dataOperacional, rota: rotaSelecionada! } }),
     enabled: modoRota && !!rotaSelecionada,
-    refetchInterval: modoRota && rotaSelecionada ? 5000 : false,
+    refetchInterval: modoRota && rotaSelecionada ? 15000 : false,
   });
 
   const { startedAt, accumulatedMs, paused, sessionOk, sessionErr, last } = session;
@@ -769,7 +769,7 @@ function TriagemPage() {
             onDetalhes={(r) => setRotaDetalhe(r)}
             loading={rotas.isLoading}
             error={rotas.error}
-            onRetry={() => rotas.refetch()}
+            onRetry={() => void rotas.refetch()}
           />
         </>
       ) : (
@@ -1303,12 +1303,16 @@ function RotasSelector({
   onAbrir,
   onDetalhes,
   loading,
+  error,
+  onRetry,
 }: {
   rotas: RotaResumo[];
   selecionada: string | null;
   onAbrir: (rota: string) => void;
   onDetalhes: (rota: string) => void;
   loading: boolean;
+  error: Error | null;
+  onRetry: () => void;
 }) {
   const abertas = rotas.filter((r) => r.status === "aberta");
   const ressalvas = rotas.filter((r) => r.status === "concluida_ressalva");
@@ -1336,7 +1340,22 @@ function RotasSelector({
           </Badge>
         </div>
       </div>
-      {loading && rotas.length === 0 ? (
+      {error && rotas.length === 0 ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <div className="flex items-center gap-2 font-semibold text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            Não foi possível carregar as rotas agora.
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            {error.message.includes("statement timeout")
+              ? "A consulta demorou demais. Tente novamente; o carregamento foi otimizado para não repetir a falha."
+              : error.message}
+          </p>
+          <Button type="button" size="sm" variant="outline" className="mt-3" onClick={onRetry}>
+            Tentar novamente
+          </Button>
+        </div>
+      ) : loading && rotas.length === 0 ? (
         <div className="text-sm text-muted-foreground py-6 text-center">Carregando rotas…</div>
       ) : rotas.length === 0 ? (
         <div className="text-sm text-muted-foreground py-6 text-center">
