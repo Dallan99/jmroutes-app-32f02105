@@ -187,8 +187,10 @@ export function ImportarUsuariosDialog() {
     const csv =
       HEADER.join(",") +
       "\n" +
+      "# base_codigo aceita: ESP15/ESP16/ESP17/ESP18 ou nomes (Base de Ibiúna, Base de Guarujá, São Lourenço ESP17, Franco da Rocha ESP18, Embu Guaçu)\n" +
       "João Silva,joao.silva@jmdistribuicao.com.br,operador,ESP15,12345,\n" +
-      "Maria Souza,maria.souza@jmdistribuicao.com.br,supervisor,ESP17,,\n";
+      "Maria Souza,maria.souza@jmdistribuicao.com.br,supervisor,Base de Guarujá,,\n" +
+      "Pedro Lima,pedro.lima@jmdistribuicao.com.br,operador,São Lourenço ESP17,54321,\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
