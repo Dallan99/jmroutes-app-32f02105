@@ -130,15 +130,20 @@ function DevolucoesPage() {
   });
 
   const registrar = useMutation({
-    mutationFn: () =>
+    mutationFn: (args: {
+      codigo: string;
+      motivo: MotivoDevolucao;
+      observacao?: string;
+      rota?: string;
+    }) =>
       registrarFn({
         data: {
           baseId: base!.id,
           diaOperacional: diaOperacional!,
-          codigo: pendente!,
-          motivo,
-          observacao: obs.trim() ? obs.trim() : undefined,
-          rota: rotaInput.trim() ? rotaInput.trim() : undefined,
+          codigo: args.codigo,
+          motivo: args.motivo,
+          observacao: args.observacao,
+          rota: args.rota,
         },
       }),
     onSuccess: (res) => {
