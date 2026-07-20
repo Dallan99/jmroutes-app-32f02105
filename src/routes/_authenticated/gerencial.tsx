@@ -620,13 +620,12 @@ function Kpi({
 // Painel: Resumo Operacional por Base (ESP15/16/17/18)
 // Filtro por dia + botões de base + tiles com atividades.
 // ============================================================
-function ResumoPorBasePanel() {
-  const [dia, setDia] = useState<string>(todayYMD());
+function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
   const [baseSel, setBaseSel] = useState<string>("todas");
   const fn = useServerFn(resumoOperacionalPorBase);
   const q = useQuery({
-    queryKey: ["resumo-por-base", dia],
-    queryFn: () => fn({ data: { dia } }),
+    queryKey: ["resumo-por-base", periodo],
+    queryFn: () => fn({ data: { periodo } }),
     refetchInterval: 30_000,
   });
 
@@ -640,6 +639,14 @@ function ResumoPorBasePanel() {
   };
 
   const codigos = ["ESP15", "ESP16", "ESP17", "ESP18"] as const;
+  const rangeTxt =
+    q.data?.inicio && q.data?.fim
+      ? q.data.inicio === q.data.fim
+        ? new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")
+        : `${new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(q.data.fim + "T00:00:00").toLocaleDateString("pt-BR")}`
+      : "—";
+
+  const basesOrdenadas = [...bases].sort((a, b) => a.codigo.localeCompare(b.codigo));
 
   return (
     <Card className="p-4 space-y-4">
@@ -649,17 +656,8 @@ function ResumoPorBasePanel() {
             <MapPin className="w-4 h-4 text-primary" /> Resumo operacional por base
           </h2>
           <p className="text-xs text-muted-foreground">
-            Atividades do dia selecionado. Clique em uma base para detalhar.
+            Atividades no período <b>{rangeTxt}</b>. Clique em uma base para detalhar.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Dia</label>
-          <Input
-            type="date"
-            value={dia}
-            onChange={(e) => setDia(e.target.value)}
-            className="h-9 w-[160px]"
-          />
         </div>
       </div>
 
@@ -702,6 +700,56 @@ function ResumoPorBasePanel() {
           <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
           <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
         </div>
+      </div>
+
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+              <th className="py-2 pr-3">Base</th>
+              <th className="py-2 pr-3 text-right">Recebimentos</th>
+              <th className="py-2 pr-3 text-right">Triados</th>
+              <th className="py-2 pr-3 text-right">Devoluções</th>
+              <th className="py-2 pr-3 text-right">Transferências</th>
+              <th className="py-2 pr-3 text-right">Inventário</th>
+              <th className="py-2 pr-3 text-right">Contagens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {basesOrdenadas.map((b) => (
+              <tr key={b.base_id} className="border-b border-border/50 hover:bg-muted/30">
+                <td className="py-2 pr-3">
+                  <b>{b.nome}</b>
+                  <div className="text-[10px] text-muted-foreground font-mono">{b.codigo}</div>
+                </td>
+                <td className="py-2 pr-3 text-right font-mono">{b.recebimentos.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono text-success">{b.triados.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono text-warning">{b.devolucoes.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{b.transferencias.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{b.inventario.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{b.contagens.toLocaleString("pt-BR")}</td>
+              </tr>
+            ))}
+            {totais && basesOrdenadas.length > 0 && (
+              <tr className="border-t-2 border-border font-semibold bg-muted/40">
+                <td className="py-2 pr-3">TOTAL</td>
+                <td className="py-2 pr-3 text-right font-mono">{totais.recebimentos.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono text-success">{totais.triados.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono text-warning">{totais.devolucoes.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{totais.transferencias.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{totais.inventario.toLocaleString("pt-BR")}</td>
+                <td className="py-2 pr-3 text-right font-mono">{totais.contagens.toLocaleString("pt-BR")}</td>
+              </tr>
+            )}
+            {!q.isLoading && basesOrdenadas.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                  Sem atividades registradas nesse período.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {q.isLoading && <p className="text-xs text-muted-foreground">Carregando…</p>}
