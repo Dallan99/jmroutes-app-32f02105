@@ -19,8 +19,23 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
       new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     }
 
-    // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (isNewSupabaseApiKey(supabaseKey) && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
+    // Determine target URL to know whether it's a PostgREST call.
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+    const isPostgrest = url.includes('/rest/');
+
+    // New Supabase API keys are opaque strings, not bearer JWTs. PostgREST
+    // rejects them as JWTs, but GoTrue's /auth/v1/admin endpoints REQUIRE
+    // `Authorization: Bearer <service_role>`. Only strip for PostgREST.
+    if (
+      isPostgrest &&
+      isNewSupabaseApiKey(supabaseKey) &&
+      headers.get('Authorization') === `Bearer ${supabaseKey}`
+    ) {
       headers.delete('Authorization');
     }
 
@@ -28,6 +43,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     return fetch(input, { ...init, headers });
   };
 }
+
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.JM_SUPABASE_URL;
