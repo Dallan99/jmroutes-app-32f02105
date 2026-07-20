@@ -343,7 +343,7 @@ function TriagemPage() {
       } else {
         beepError();
         setFlash("error");
-        toast.error(res.mensagem, { duration: 5000 });
+        setBloqueioErro(res.mensagem);
       }
       setSession((s) => ({
         ...s,
