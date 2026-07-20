@@ -35,6 +35,40 @@ type Linha = {
 
 const HEADER = ["nome", "email", "role", "base_codigo", "matricula", "senha"] as const;
 
+// Aceita tanto siglas (ESP15) quanto nomes das bases usados na planilha da JM.
+const BASES_VALIDAS = ["ESP15", "ESP16", "ESP17", "ESP18"] as const;
+const BASE_ALIASES: Record<string, (typeof BASES_VALIDAS)[number]> = {
+  ESP15: "ESP15",
+  ESP16: "ESP16",
+  ESP17: "ESP17",
+  ESP18: "ESP18",
+  IBIUNA: "ESP15",
+  "BASE DE IBIUNA": "ESP15",
+  GUARUJA: "ESP16",
+  GAURUJA: "ESP16",
+  "BASE DE GUARUJA": "ESP16",
+  "EMBU GUACU": "ESP17",
+  "BASE DE EMBU GUACU": "ESP17",
+  "SAO LOURENCO": "ESP17",
+  "FRANCO DA ROCHA": "ESP18",
+  "BASE DE FRANCO DA ROCHA": "ESP18",
+};
+
+function normalizarBase(entrada: string): string {
+  const bruto = entrada.trim();
+  if (!bruto) return "";
+  // remove acentos, colapsa espaços, uppercase
+  const norm = bruto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  // procura sigla ESPxx dentro do texto (ex.: "São Lourenço ESP17")
+  const sigla = norm.match(/ESP\s*1[5-8]/);
+  if (sigla) return sigla[0].replace(/\s+/g, "");
+  return BASE_ALIASES[norm] ?? norm;
+}
+
 function parseCsv(texto: string): string[][] {
   const linhas: string[][] = [];
   let campo = "";
@@ -87,6 +121,8 @@ function validar(l: Omit<Linha, "linha" | "erro">): string | undefined {
   if (!["admin", "gerente", "supervisor", "operador"].includes(l.role))
     return "Role deve ser admin|gerente|supervisor|operador.";
   if (l.role === "operador" && !l.base_codigo) return "Operador exige base_codigo.";
+  if (l.base_codigo && !BASES_VALIDAS.includes(l.base_codigo as (typeof BASES_VALIDAS)[number]))
+    return `Base inválida: use ${BASES_VALIDAS.join(", ")} ou o nome (ex.: "Base de Ibiúna", "São Lourenço ESP17").`;
   if (l.senha.length < 8) return "Senha muito curta (mínimo 8).";
   return undefined;
 }
@@ -106,14 +142,16 @@ export function ImportarUsuariosDialog() {
     const first = rows[0].map((c) => c.trim().toLowerCase());
     const isHeader = first.includes("email") && first.includes("nome");
     const idxs = HEADER.map((h) => (isHeader ? first.indexOf(h) : HEADER.indexOf(h)));
-    const dataRows = isHeader ? rows.slice(1) : rows;
+    const dataRows = (isHeader ? rows.slice(1) : rows).filter(
+      (r) => !(r[0] ?? "").trim().startsWith("#"),
+    );
     return dataRows.map((cols, i) => {
       const get = (idx: number) => (idx >= 0 ? (cols[idx] ?? "").trim() : "");
       const item: Omit<Linha, "linha" | "erro"> = {
         nome: get(idxs[0]),
         email: get(idxs[1]).toLowerCase(),
         role: (get(idxs[2]).toLowerCase() as Role) || ("operador" as Role),
-        base_codigo: get(idxs[3]).toUpperCase(),
+        base_codigo: normalizarBase(get(idxs[3])),
         matricula: get(idxs[4]),
         senha: get(idxs[5]) || gerarSenha(),
       };
@@ -151,8 +189,10 @@ export function ImportarUsuariosDialog() {
     const csv =
       HEADER.join(",") +
       "\n" +
+      "# base_codigo aceita: ESP15/ESP16/ESP17/ESP18 ou nomes (Base de Ibiúna, Base de Guarujá, São Lourenço ESP17, Franco da Rocha ESP18, Embu Guaçu)\n" +
       "João Silva,joao.silva@jmdistribuicao.com.br,operador,ESP15,12345,\n" +
-      "Maria Souza,maria.souza@jmdistribuicao.com.br,supervisor,ESP17,,\n";
+      "Maria Souza,maria.souza@jmdistribuicao.com.br,supervisor,Base de Guarujá,,\n" +
+      "Pedro Lima,pedro.lima@jmdistribuicao.com.br,operador,São Lourenço ESP17,54321,\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
