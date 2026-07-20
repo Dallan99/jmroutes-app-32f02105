@@ -35,6 +35,40 @@ type Linha = {
 
 const HEADER = ["nome", "email", "role", "base_codigo", "matricula", "senha"] as const;
 
+// Aceita tanto siglas (ESP15) quanto nomes das bases usados na planilha da JM.
+const BASES_VALIDAS = ["ESP15", "ESP16", "ESP17", "ESP18"] as const;
+const BASE_ALIASES: Record<string, (typeof BASES_VALIDAS)[number]> = {
+  ESP15: "ESP15",
+  ESP16: "ESP16",
+  ESP17: "ESP17",
+  ESP18: "ESP18",
+  IBIUNA: "ESP15",
+  "BASE DE IBIUNA": "ESP15",
+  GUARUJA: "ESP16",
+  GAURUJA: "ESP16",
+  "BASE DE GUARUJA": "ESP16",
+  "EMBU GUACU": "ESP17",
+  "BASE DE EMBU GUACU": "ESP17",
+  "SAO LOURENCO": "ESP17",
+  "FRANCO DA ROCHA": "ESP18",
+  "BASE DE FRANCO DA ROCHA": "ESP18",
+};
+
+function normalizarBase(entrada: string): string {
+  const bruto = entrada.trim();
+  if (!bruto) return "";
+  // remove acentos, colapsa espaços, uppercase
+  const norm = bruto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  // procura sigla ESPxx dentro do texto (ex.: "São Lourenço ESP17")
+  const sigla = norm.match(/ESP\s*1[5-8]/);
+  if (sigla) return sigla[0].replace(/\s+/g, "");
+  return BASE_ALIASES[norm] ?? norm;
+}
+
 function parseCsv(texto: string): string[][] {
   const linhas: string[][] = [];
   let campo = "";
