@@ -3,6 +3,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { normalizarCodigoTriagem, resumirRotasTriagem, rotaEfetivaTriagem } from "./triagem-domain";
 
+// O PostgREST/Supabase limita respostas a 1.000 linhas por página neste projeto.
+// Usar range maior retorna só 1.000 e fazia a Triagem parar antes de carregar todas as rotas.
+const ESCALAS_PAGE_SIZE = 1000;
+
 const bipSchema = z.object({
   codigo: z
     .string()
@@ -122,7 +126,7 @@ export const concluirRotaComRessalva = createServerFn({
       // o PostgREST não otimiza esse filtro composto e cai em seq scan.
       const rotaFiltro = data.rota;
       const baseQ = () =>
-        supabase
+        supabaseAdmin
           .from("escalas")
           .select("id", { count: "exact", head: true })
           .eq("importacao_id", importacao.id)
@@ -394,13 +398,16 @@ export const biparTriagem = createServerFn({ method: "POST" })
     }
 
     const countRota = async () => {
-      let previstosQuery = supabase
+      const { supabaseAdmin } = await import(
+        "@/integrations/supabase/client.server"
+      );
+      let previstosQuery = supabaseAdmin
         .from("escalas")
         .select("id", { count: "exact", head: true })
         .eq("importacao_id", escala!.importacao_id!)
         .not("shipment", "is", null)
         .neq("shipment", "");
-      let triadosQuery = supabase
+      let triadosQuery = supabaseAdmin
         .from("escalas")
         .select("id", { count: "exact", head: true })
         .eq("importacao_id", escala!.importacao_id!)
@@ -539,7 +546,7 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
       "@/integrations/supabase/client.server"
     );
 
-    const PAGE_SIZE = 5000;
+    const PAGE_SIZE = ESCALAS_PAGE_SIZE;
 
     const linhas: Array<{
       shipment: string | null;
@@ -559,6 +566,7 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
         .eq("importacao_id", impAtiva.id)
         .not("shipment", "is", null)
         .neq("shipment", "")
+        .order("id", { ascending: true })
         .range(inicio, inicio + PAGE_SIZE - 1);
 
       if (paginaErro) {
@@ -777,14 +785,17 @@ export const triagemResumoDia = createServerFn({ method: "GET" })
     let totalPrev = 0;
     let triados = 0;
     if (impAtiva) {
+      const { supabaseAdmin } = await import(
+        "@/integrations/supabase/client.server"
+      );
       const [{ count: p }, { count: t }] = await Promise.all([
-        supabase
+        supabaseAdmin
           .from("escalas")
           .select("id", { count: "exact", head: true })
           .eq("importacao_id", impAtiva.id)
           .not("shipment", "is", null)
           .neq("shipment", ""),
-        supabase
+        supabaseAdmin
           .from("escalas")
           .select("id", { count: "exact", head: true })
           .eq("importacao_id", impAtiva.id)
@@ -844,7 +855,7 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
       "@/integrations/supabase/client.server"
     );
 
-    const PAGE = 5000;
+    const PAGE = ESCALAS_PAGE_SIZE;
     type LinhaRota = {
       id: string;
       shipment: string | null;
@@ -859,7 +870,8 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
           .select("id, shipment, cidade, triado")
           .eq("importacao_id", impAtiva.id)
           .not("shipment", "is", null)
-          .neq("shipment", "");
+          .neq("shipment", "")
+          .order("id", { ascending: true });
         if (modo === "otimizada") {
           query = query.eq("otimizada", data.rota);
         } else if (modo === "planejadaNula") {
