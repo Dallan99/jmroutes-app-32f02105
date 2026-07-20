@@ -693,15 +693,36 @@ function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
         <div className="text-xs text-muted-foreground mb-2">
           Exibindo: <span className="font-medium text-foreground">{view.codigo}</span>
           {view.nome && view.codigo !== "TODAS" ? ` — ${view.nome}` : ""}
+          <span className="ml-2 text-muted-foreground/80">· clique em um card para ver os registros</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <Kpi label="Volumes triados" value={view.triados} icon={PackageCheck} accent="success" />
-          <Kpi label="Recebimentos" value={view.recebimentos} icon={Activity} />
-          <Kpi label="Devoluções" value={view.devolucoes} icon={RotateCcw} accent="destructive" />
-          <Kpi label="Inventário" value={view.inventario} icon={Package} accent="info" />
-          <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
-          <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
-        </div>
+        {(() => {
+          const baseIdSel = baseAtiva?.base_id ?? null;
+          const baseTag = baseAtiva ? ` (${baseAtiva.codigo})` : "";
+          const open = (m: MetricaResumo, label: string) =>
+            setDrill({ metrica: m, baseId: baseIdSel, label: label + baseTag });
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <button type="button" onClick={() => open("triados", "Volumes triados")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Volumes triados" value={view.triados} icon={PackageCheck} accent="success" />
+              </button>
+              <button type="button" onClick={() => open("recebimentos", "Recebimentos")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Recebimentos" value={view.recebimentos} icon={Activity} />
+              </button>
+              <button type="button" onClick={() => open("devolucoes", "Devoluções")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Devoluções" value={view.devolucoes} icon={RotateCcw} accent="destructive" />
+              </button>
+              <button type="button" onClick={() => open("inventario", "Inventário")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Inventário" value={view.inventario} icon={Package} accent="info" />
+              </button>
+              <button type="button" onClick={() => open("transferencias", "Transferências")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
+              </button>
+              <button type="button" onClick={() => open("contagens", "Contagens")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="overflow-x-auto -mx-4 px-4">
@@ -718,20 +739,30 @@ function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
             </tr>
           </thead>
           <tbody>
-            {basesOrdenadas.map((b) => (
-              <tr key={b.base_id} className="border-b border-border/50 hover:bg-muted/30">
-                <td className="py-2 pr-3">
-                  <b>{b.nome}</b>
-                  <div className="text-[10px] text-muted-foreground font-mono">{b.codigo}</div>
+            {basesOrdenadas.map((b) => {
+              const cell = (m: MetricaResumo, val: number, extra = "") => (
+                <td
+                  className={`py-2 pr-3 text-right font-mono ${val > 0 ? "cursor-pointer hover:underline" : "text-muted-foreground"} ${extra}`}
+                  onClick={val > 0 ? () => setDrill({ metrica: m, baseId: b.base_id, label: `${labelMetrica(m)} (${b.codigo})` }) : undefined}
+                >
+                  {val.toLocaleString("pt-BR")}
                 </td>
-                <td className="py-2 pr-3 text-right font-mono">{b.recebimentos.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono text-success">{b.triados.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono text-warning">{b.devolucoes.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.transferencias.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.inventario.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.contagens.toLocaleString("pt-BR")}</td>
-              </tr>
-            ))}
+              );
+              return (
+                <tr key={b.base_id} className="border-b border-border/50 hover:bg-muted/30">
+                  <td className="py-2 pr-3">
+                    <b>{b.nome}</b>
+                    <div className="text-[10px] text-muted-foreground font-mono">{b.codigo}</div>
+                  </td>
+                  {cell("recebimentos", b.recebimentos)}
+                  {cell("triados", b.triados, "text-success")}
+                  {cell("devolucoes", b.devolucoes, "text-warning")}
+                  {cell("transferencias", b.transferencias)}
+                  {cell("inventario", b.inventario)}
+                  {cell("contagens", b.contagens)}
+                </tr>
+              );
+            })}
             {totais && basesOrdenadas.length > 0 && (
               <tr className="border-t-2 border-border font-semibold bg-muted/40">
                 <td className="py-2 pr-3">TOTAL</td>
