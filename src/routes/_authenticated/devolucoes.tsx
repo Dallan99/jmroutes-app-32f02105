@@ -185,11 +185,20 @@ function DevolucoesPage() {
     (cod: string) => {
       const c = cod.trim();
       if (c.length < 1) return;
+      if (modoRapido) {
+        registrar.mutate({
+          codigo: c,
+          motivo: motivoPadrao,
+          rota: rotaSessao.trim() ? rotaSessao.trim() : undefined,
+        });
+        setCodigo("");
+        return;
+      }
       setPendente(c);
       setRotaInput(rotaSessao);
       setCodigo("");
     },
-    [rotaSessao],
+    [modoRapido, motivoPadrao, registrar, rotaSessao],
   );
 
   const totalHoje = lista.data?.filter((d) => !d.cancelado).length ?? 0;
