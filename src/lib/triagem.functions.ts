@@ -116,49 +116,29 @@ export const concluirRotaComRessalva = createServerFn({
         );
       }
 
-      const PAGE_SIZE = 1000;
+      // Contagem via agregação no Postgres para evitar statement timeout ao
+      // paginar milhares de linhas quando a importação é grande.
+      // Rota efetiva = otimizada (se preenchida) senão planejada.
+      const rotaFiltro = data.rota;
+      const filtroRotaEfetiva = `and(otimizada.eq.${rotaFiltro}),and(otimizada.is.null,planejada.eq.${rotaFiltro}),and(otimizada.eq.,planejada.eq.${rotaFiltro})`;
 
-      const linhas: Array<{
-        shipment: string | null;
-        planejada: string | null;
-        otimizada: string | null;
-        triado: boolean | null;
-      }> = [];
-
-      for (let inicio = 0; ; inicio += PAGE_SIZE) {
-        const { data: pagina, error } = await supabase
+      const baseQuery = () =>
+        supabase
           .from("escalas")
-          .select("shipment, planejada, otimizada, triado")
+          .select("id", { count: "exact", head: true })
           .eq("importacao_id", importacao.id)
-          .order("id", { ascending: true })
-          .range(inicio, inicio + PAGE_SIZE - 1);
+          .not("shipment", "is", null)
+          .neq("shipment", "")
+          .or(filtroRotaEfetiva);
 
-        if (error) {
-          throw new Error(error.message);
-        }
+      const { count: previstosCount, error: previstosErro } = await baseQuery();
+      if (previstosErro) throw new Error(previstosErro.message);
 
-        if (!pagina?.length) {
-          break;
-        }
+      const { count: triadosCount, error: triadosErro } = await baseQuery().eq("triado", true);
+      if (triadosErro) throw new Error(triadosErro.message);
 
-        linhas.push(...pagina);
-
-        if (pagina.length < PAGE_SIZE) {
-          break;
-        }
-      }
-
-      const linhasDaRota = linhas.filter(
-        (linha) =>
-          linha.shipment?.trim() &&
-          rotaEfetivaTriagem(linha) === data.rota,
-      );
-
-      const previstos = linhasDaRota.length;
-      const triados = linhasDaRota.filter(
-        (linha) => Boolean(linha.triado),
-      ).length;
-
+      const previstos = previstosCount ?? 0;
+      const triados = triadosCount ?? 0;
       const faltantes = Math.max(previstos - triados, 0);
 
       if (previstos === 0) {
