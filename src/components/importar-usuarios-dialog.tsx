@@ -35,7 +35,36 @@ type Linha = {
 
 const HEADER = ["nome", "email", "role", "base_codigo", "matricula", "senha"] as const;
 
-// Aceita tanto siglas (ESP15) quanto nomes das bases usados na planilha da JM.
+// Aliases de cabeçalho aceitos no CSV (normalizados: sem acento, lowercase).
+const HEADER_ALIASES: Record<string, (typeof HEADER)[number]> = {
+  nome: "nome",
+  name: "nome",
+  email: "email",
+  "e-mail": "email",
+  role: "role",
+  perfil: "role",
+  papel: "role",
+  base_codigo: "base_codigo",
+  base: "base_codigo",
+  "codigo base": "base_codigo",
+  matricula: "matricula",
+  senha: "senha",
+  senhas: "senha",
+  password: "senha",
+};
+
+// Traduz valores PT do "Perfil" para roles do sistema.
+const ROLE_ALIASES: Record<string, Role> = {
+  admin: "admin",
+  administrador: "admin",
+  administradora: "admin",
+  gerente: "gerente",
+  supervisor: "supervisor",
+  supervisora: "supervisor",
+  operador: "operador",
+  operadora: "operador",
+};
+
 const BASES_VALIDAS = ["ESP15", "ESP16", "ESP17", "ESP18"] as const;
 const BASE_ALIASES: Record<string, (typeof BASES_VALIDAS)[number]> = {
   ESP15: "ESP15",
@@ -54,19 +83,34 @@ const BASE_ALIASES: Record<string, (typeof BASES_VALIDAS)[number]> = {
   "BASE DE FRANCO DA ROCHA": "ESP18",
 };
 
-function normalizarBase(entrada: string): string {
-  const bruto = entrada.trim();
-  if (!bruto) return "";
-  // remove acentos, colapsa espaços, uppercase
-  const norm = bruto
+function normalizarTexto(entrada: string): string {
+  return entrada
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
+    .trim()
     .toUpperCase();
-  // procura sigla ESPxx dentro do texto (ex.: "São Lourenço ESP17")
+}
+
+function limparValor(entrada: string): string {
+  const v = entrada.trim();
+  if (!v || v === "—" || v === "-" || v === "–") return "";
+  return v;
+}
+
+function normalizarBase(entrada: string): string {
+  const bruto = limparValor(entrada);
+  if (!bruto) return "";
+  const norm = normalizarTexto(bruto);
   const sigla = norm.match(/ESP\s*1[5-8]/);
   if (sigla) return sigla[0].replace(/\s+/g, "");
   return BASE_ALIASES[norm] ?? norm;
+}
+
+function normalizarRole(entrada: string): Role | "" {
+  const v = limparValor(entrada).toLowerCase();
+  if (!v) return "";
+  return (ROLE_ALIASES[v] ?? v) as Role;
 }
 
 function parseCsv(texto: string): string[][] {
@@ -138,22 +182,36 @@ export function ImportarUsuariosDialog() {
     if (!texto.trim()) return [];
     const rows = parseCsv(texto);
     if (rows.length === 0) return [];
-    // Detecta se primeira linha é header
-    const first = rows[0].map((c) => c.trim().toLowerCase());
-    const isHeader = first.includes("email") && first.includes("nome");
-    const idxs = HEADER.map((h) => (isHeader ? first.indexOf(h) : HEADER.indexOf(h)));
+    const first = rows[0].map((c) =>
+      c
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""),
+    );
+    // header detectado se ao menos uma célula bate com um alias conhecido
+    const isHeader = first.some((c) => c in HEADER_ALIASES);
+    // Mapeia cada coluna HEADER para o índice correspondente no CSV
+    const idxs = HEADER.map((h) => {
+      if (isHeader) {
+        const i = first.findIndex((c) => HEADER_ALIASES[c] === h);
+        return i;
+      }
+      return HEADER.indexOf(h);
+    });
     const dataRows = (isHeader ? rows.slice(1) : rows).filter(
       (r) => !(r[0] ?? "").trim().startsWith("#"),
     );
     return dataRows.map((cols, i) => {
       const get = (idx: number) => (idx >= 0 ? (cols[idx] ?? "").trim() : "");
+      const roleNorm = normalizarRole(get(idxs[2]));
       const item: Omit<Linha, "linha" | "erro"> = {
-        nome: get(idxs[0]),
-        email: get(idxs[1]).toLowerCase(),
-        role: (get(idxs[2]).toLowerCase() as Role) || ("operador" as Role),
+        nome: limparValor(get(idxs[0])),
+        email: limparValor(get(idxs[1])).toLowerCase(),
+        role: (roleNorm || "operador") as Role,
         base_codigo: normalizarBase(get(idxs[3])),
-        matricula: get(idxs[4]),
-        senha: get(idxs[5]) || gerarSenha(),
+        matricula: limparValor(get(idxs[4])),
+        senha: limparValor(get(idxs[5])) || gerarSenha(),
       };
       return { linha: i + (isHeader ? 2 : 1), ...item, erro: validar(item) };
     });
