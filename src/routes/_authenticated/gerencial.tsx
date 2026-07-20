@@ -623,6 +623,7 @@ function Kpi({
 // ============================================================
 function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
   const [baseSel, setBaseSel] = useState<string>("todas");
+  const [drill, setDrill] = useState<{ metrica: MetricaResumo; baseId: string | null; label: string } | null>(null);
   const fn = useServerFn(resumoOperacionalPorBase);
   const q = useQuery({
     queryKey: ["resumo-por-base", periodo],
