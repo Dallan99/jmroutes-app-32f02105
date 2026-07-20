@@ -71,7 +71,7 @@ function GerencialPage() {
         </div>
       </div>
 
-      <ResumoPorBasePanel />
+      <ResumoPorBasePanel periodo={periodo} />
 
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
