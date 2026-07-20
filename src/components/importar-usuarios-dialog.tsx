@@ -150,11 +150,10 @@ function parseCsv(texto: string): string[][] {
   return linhas.filter((l) => l.some((c) => c.trim().length > 0));
 }
 
+const SENHA_PADRAO = "JM@transportes";
+
 function gerarSenha(): string {
-  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let out = "JM-";
-  for (let i = 0; i < 9; i++) out += alfabeto[Math.floor(Math.random() * alfabeto.length)];
-  return out;
+  return SENHA_PADRAO;
 }
 
 function validar(l: Omit<Linha, "linha" | "erro">): string | undefined {
