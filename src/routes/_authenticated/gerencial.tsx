@@ -71,6 +71,9 @@ function GerencialPage() {
         </div>
       </div>
 
+      <ResumoPorBasePanel />
+
+
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <Kpi label="Total leituras" value={d?.totais.total_leituras ?? "—"} icon={Activity} />
         <Kpi label="Sucesso" value={d?.totais.ok ?? "—"} icon={PackageCheck} accent="success" />
