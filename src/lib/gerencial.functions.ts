@@ -819,7 +819,7 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
         .order("created_at", { ascending: false })
         .limit(data.limit);
       if (data.base_id) q = q.eq("base_id", data.base_id);
-      if (data.metrica === "triados") q = q.in("resultado", ["ok", "primeira_leitura", "concluiu_rota"]);
+      if (data.metrica === "triados") q = q.eq("resultado", "ok");
       const { data: rows, error } = await q;
       if (error) throw new Error(error.message);
       for (const r of rows ?? []) {
