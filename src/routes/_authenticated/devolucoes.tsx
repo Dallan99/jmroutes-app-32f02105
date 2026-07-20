@@ -336,7 +336,7 @@ function DevolucoesPage() {
         <div className="mb-4 rounded-md border bg-muted/30 p-3 flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <Label htmlFor="rota-sessao" className="text-xs">
-              Rota atual (aplicada a todas as devoluções abaixo)
+              Rota atual (obrigatória — travada até finalizar)
             </Label>
             <Input
               id="rota-sessao"
@@ -344,16 +344,57 @@ function DevolucoesPage() {
               onChange={(e) => setRotaSessao(e.target.value.toUpperCase())}
               placeholder="Ex.: VN6_AM1"
               className="font-mono h-10 mt-1"
+              readOnly={rotaTravada}
             />
           </div>
-          {rotaSessao && (
-            <Button variant="ghost" size="sm" onClick={() => setRotaSessao("")}>
-              Limpar rota
+          {rotaTravada ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setRotaSessao("");
+                setTimeout(() => inputRef.current?.focus(), 50);
+              }}
+            >
+              Finalizar rota
             </Button>
+          ) : (
+            <span className="text-[11px] text-amber-700 dark:text-amber-400 max-w-xs">
+              Informe a rota para liberar as bipagens. Ela ficará travada até você clicar em
+              <b> Finalizar rota</b>.
+            </span>
           )}
-          <div className="text-[11px] text-muted-foreground max-w-xs">
-            Bipagens abaixo virão com esta rota preenchida automaticamente. Você ainda pode alterar
-            no momento da confirmação.
+          <div className="w-full flex items-center gap-3 flex-wrap pt-2 border-t mt-1">
+            <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={modoRapido}
+                onChange={(e) => setModoRapido(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>
+                <b>Modo rápido</b> — bipar somente IDs (sem escolher motivo)
+              </span>
+            </label>
+            {modoRapido && (
+              <div className="flex items-center gap-2 text-xs">
+                <Label htmlFor="motivo-padrao" className="text-xs">
+                  Motivo padrão:
+                </Label>
+                <select
+                  id="motivo-padrao"
+                  value={motivoPadrao}
+                  onChange={(e) => setMotivoPadrao(e.target.value as MotivoDevolucao)}
+                  className="h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  {MOTIVOS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -364,7 +405,12 @@ function DevolucoesPage() {
               ref={inputRef}
               autoFocus
               value={codigo}
-              placeholder="Bipe o ID do produto devolvido…"
+              placeholder={
+                rotaTravada
+                  ? "Bipe o ID do produto devolvido…"
+                  : "Preencha a rota acima para iniciar as bipagens"
+              }
+              disabled={!rotaTravada}
               onChange={(e) => setCodigo(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
