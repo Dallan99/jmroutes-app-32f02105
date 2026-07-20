@@ -566,6 +566,7 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
         .eq("importacao_id", impAtiva.id)
         .not("shipment", "is", null)
         .neq("shipment", "")
+        .order("id", { ascending: true })
         .range(inicio, inicio + PAGE_SIZE - 1);
 
       if (paginaErro) {
@@ -869,7 +870,8 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
           .select("id, shipment, cidade, triado")
           .eq("importacao_id", impAtiva.id)
           .not("shipment", "is", null)
-          .neq("shipment", "");
+          .neq("shipment", "")
+          .order("id", { ascending: true });
         if (modo === "otimizada") {
           query = query.eq("otimizada", data.rota);
         } else if (modo === "planejadaNula") {
