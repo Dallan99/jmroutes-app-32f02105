@@ -145,10 +145,11 @@ export const criarUsuario = createServerFn({ method: "POST" })
       })
       .eq("id", uid);
 
-    if (data.role !== "operador") {
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", uid).eq("role", "operador");
-      await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: data.role });
-    }
+    // O trigger handle_new_user já criou role 'operador'. Sincronizamos removendo
+    // todas as roles existentes e inserindo apenas a solicitada (evita usuário
+    // com dois perfis simultâneos, ex.: Operador + Administrador).
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+    await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: data.role });
     const { registrarAuditInterno } = await import("./audit.server");
     await registrarAuditInterno(context.supabase, context.userId, {
       acao: "usuario.criado",
@@ -427,10 +428,10 @@ export const importarUsuarios = createServerFn({ method: "POST" })
           })
           .eq("id", uid);
 
-        if (u.role !== "operador") {
-          await supabaseAdmin.from("user_roles").delete().eq("user_id", uid).eq("role", "operador");
-          await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: u.role });
-        }
+        // Remove qualquer role pré-existente (trigger handle_new_user cria 'operador')
+        // e insere exatamente a role solicitada, para não acumular perfis.
+        await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+        await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: u.role });
 
         resultados.push({
           linha,
