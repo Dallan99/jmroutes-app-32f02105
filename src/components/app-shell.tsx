@@ -190,9 +190,13 @@ function AppSidebar({ roles, rolesCarregadas }: { roles: Array<Role>; rolesCarre
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {renderGroup("Operação", NAV_OPERACIONAL)}
-        {renderGroup("Gestão", NAV_GESTAO)}
-        {renderGroup("Administração", NAV_ADMIN)}
+        {rolesCarregadas && (
+          <>
+            {renderGroup("Operação", NAV_OPERACIONAL)}
+            {renderGroup("Gestão", NAV_GESTAO)}
+            {renderGroup("Administração", NAV_ADMIN)}
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
         {!collapsed && <div className="text-[10px] text-sidebar-foreground/50 px-2 py-1">v1.0 · Iteração 1</div>}
@@ -201,7 +205,8 @@ function AppSidebar({ roles, rolesCarregadas }: { roles: Array<Role>; rolesCarre
   );
 }
 
-function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
+function TopBar({ nome, roles, rolesCarregadas }: { nome: string | null; roles: string[]; rolesCarregadas: boolean }) {
+
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { base, diaOperacional, limpar } = useBaseOperacional();
