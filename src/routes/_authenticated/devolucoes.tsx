@@ -48,6 +48,8 @@ import {
   Trash2,
   Printer,
   Download,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
 import {
