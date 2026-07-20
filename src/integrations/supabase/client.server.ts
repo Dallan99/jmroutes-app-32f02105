@@ -9,6 +9,17 @@ function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
 
+function isPublishableSupabaseKey(value: string): boolean {
+  if (value.startsWith('sb_publishable_')) return true;
+  if (value.split('.').length !== 3) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString('utf8'));
+    return payload?.role === 'anon' || payload?.role === 'authenticated';
+  } catch {
+    return false;
+  }
+}
+
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
   return (input, init) => {
     const headers = new Headers(
@@ -50,7 +61,10 @@ function createSupabaseAdminClient() {
   // A integraÃ§Ã£o nova da Supabase usa SUPABASE_SECRET_KEY; projetos antigos
   // ainda expÃµem SUPABASE_SERVICE_ROLE_KEY. Ambas sÃ£o chaves somente do servidor.
   const SUPABASE_SERVICE_ROLE_KEY =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY ?? process.env.JM_SUPABASE_SECRET_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.SUPABASE_SECRET_KEY ??
+    process.env.JM_SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.JM_SUPABASE_SECRET_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [
@@ -60,6 +74,12 @@ function createSupabaseAdminClient() {
     const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
+  }
+
+  if (isPublishableSupabaseKey(SUPABASE_SERVICE_ROLE_KEY)) {
+    throw new Error(
+      'Chave administrativa do Supabase inválida: foi configurada uma publishable/anon key. Configure JM_SUPABASE_SERVICE_ROLE_KEY com a service_role/secret key do Supabase de homologação.',
+    );
   }
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
