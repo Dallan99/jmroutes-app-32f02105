@@ -114,10 +114,13 @@ function DevolucoesPage() {
   const [obs, setObs] = useState("");
   const [rotaSessao, setRotaSessao] = useState("");
   const [rotaInput, setRotaInput] = useState("");
+  const [modoRapido, setModoRapido] = useState(false);
+  const [motivoPadrao, setMotivoPadrao] = useState<MotivoDevolucao>("outros");
   const [ultimo, setUltimo] = useState<RegistrarDevolucaoResult | null>(null);
   const [diaHistorico, setDiaHistorico] = useState<string>(diaOperacional ?? "");
   const diaAtivo = diaHistorico || diaOperacional;
   const consultandoHoje = diaAtivo === diaOperacional;
+  const rotaTravada = rotaSessao.trim().length > 0;
 
   const lista = useQuery({
     queryKey: ["devolucoes", base?.id, diaAtivo],
@@ -127,15 +130,20 @@ function DevolucoesPage() {
   });
 
   const registrar = useMutation({
-    mutationFn: () =>
+    mutationFn: (args: {
+      codigo: string;
+      motivo: MotivoDevolucao;
+      observacao?: string;
+      rota?: string;
+    }) =>
       registrarFn({
         data: {
           baseId: base!.id,
           diaOperacional: diaOperacional!,
-          codigo: pendente!,
-          motivo,
-          observacao: obs.trim() ? obs.trim() : undefined,
-          rota: rotaInput.trim() ? rotaInput.trim() : undefined,
+          codigo: args.codigo,
+          motivo: args.motivo,
+          observacao: args.observacao,
+          rota: args.rota,
         },
       }),
     onSuccess: (res) => {
@@ -177,11 +185,20 @@ function DevolucoesPage() {
     (cod: string) => {
       const c = cod.trim();
       if (c.length < 1) return;
+      if (modoRapido) {
+        registrar.mutate({
+          codigo: c,
+          motivo: motivoPadrao,
+          rota: rotaSessao.trim() ? rotaSessao.trim() : undefined,
+        });
+        setCodigo("");
+        return;
+      }
       setPendente(c);
       setRotaInput(rotaSessao);
       setCodigo("");
     },
-    [rotaSessao],
+    [modoRapido, motivoPadrao, registrar, rotaSessao],
   );
 
   const totalHoje = lista.data?.filter((d) => !d.cancelado).length ?? 0;
@@ -319,7 +336,7 @@ function DevolucoesPage() {
         <div className="mb-4 rounded-md border bg-muted/30 p-3 flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <Label htmlFor="rota-sessao" className="text-xs">
-              Rota atual (aplicada a todas as devoluções abaixo)
+              Rota atual (obrigatória — travada até finalizar)
             </Label>
             <Input
               id="rota-sessao"
@@ -327,16 +344,57 @@ function DevolucoesPage() {
               onChange={(e) => setRotaSessao(e.target.value.toUpperCase())}
               placeholder="Ex.: VN6_AM1"
               className="font-mono h-10 mt-1"
+              readOnly={rotaTravada}
             />
           </div>
-          {rotaSessao && (
-            <Button variant="ghost" size="sm" onClick={() => setRotaSessao("")}>
-              Limpar rota
+          {rotaTravada ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setRotaSessao("");
+                setTimeout(() => inputRef.current?.focus(), 50);
+              }}
+            >
+              Finalizar rota
             </Button>
+          ) : (
+            <span className="text-[11px] text-amber-700 dark:text-amber-400 max-w-xs">
+              Informe a rota para liberar as bipagens. Ela ficará travada até você clicar em
+              <b> Finalizar rota</b>.
+            </span>
           )}
-          <div className="text-[11px] text-muted-foreground max-w-xs">
-            Bipagens abaixo virão com esta rota preenchida automaticamente. Você ainda pode alterar
-            no momento da confirmação.
+          <div className="w-full flex items-center gap-3 flex-wrap pt-2 border-t mt-1">
+            <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={modoRapido}
+                onChange={(e) => setModoRapido(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>
+                <b>Modo rápido</b> — bipar somente IDs (sem escolher motivo)
+              </span>
+            </label>
+            {modoRapido && (
+              <div className="flex items-center gap-2 text-xs">
+                <Label htmlFor="motivo-padrao" className="text-xs">
+                  Motivo padrão:
+                </Label>
+                <select
+                  id="motivo-padrao"
+                  value={motivoPadrao}
+                  onChange={(e) => setMotivoPadrao(e.target.value as MotivoDevolucao)}
+                  className="h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  {MOTIVOS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -347,7 +405,12 @@ function DevolucoesPage() {
               ref={inputRef}
               autoFocus
               value={codigo}
-              placeholder="Bipe o ID do produto devolvido…"
+              placeholder={
+                rotaTravada
+                  ? "Bipe o ID do produto devolvido…"
+                  : "Preencha a rota acima para iniciar as bipagens"
+              }
+              disabled={!rotaTravada}
               onChange={(e) => setCodigo(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -358,7 +421,11 @@ function DevolucoesPage() {
               className="pl-9 h-12 text-lg font-mono"
             />
           </div>
-          <Button size="lg" onClick={() => abrirModal(codigo)} disabled={codigo.trim().length < 1}>
+          <Button
+            size="lg"
+            onClick={() => abrirModal(codigo)}
+            disabled={!rotaTravada || codigo.trim().length < 1}
+          >
             Registrar
           </Button>
           <DropdownMenu>
@@ -570,7 +637,17 @@ function DevolucoesPage() {
             <Button variant="outline" onClick={() => setPendente(null)}>
               Cancelar
             </Button>
-            <Button onClick={() => registrar.mutate()} disabled={registrar.isPending}>
+            <Button
+              onClick={() =>
+                registrar.mutate({
+                  codigo: pendente!,
+                  motivo,
+                  observacao: obs.trim() ? obs.trim() : undefined,
+                  rota: rotaInput.trim() ? rotaInput.trim() : undefined,
+                })
+              }
+              disabled={registrar.isPending}
+            >
               {registrar.isPending ? (
                 "Salvando…"
               ) : (
