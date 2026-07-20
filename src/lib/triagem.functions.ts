@@ -539,7 +539,7 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
       "@/integrations/supabase/client.server"
     );
 
-    const PAGE_SIZE = 1000;
+    const PAGE_SIZE = 5000;
 
     const linhas: Array<{
       shipment: string | null;
@@ -559,7 +559,6 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
         .eq("importacao_id", impAtiva.id)
         .not("shipment", "is", null)
         .neq("shipment", "")
-        .order("id", { ascending: true })
         .range(inicio, inicio + PAGE_SIZE - 1);
 
       if (paginaErro) {
@@ -841,28 +840,34 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
         triados: [] as Array<{ shipment: string; cidade: string | null }>,
       };
 
-    const PAGE = 1000;
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const PAGE = 5000;
     type LinhaRota = {
       id: string;
       shipment: string | null;
       cidade: string | null;
       triado: boolean | null;
     };
-    const carregar = async (fallbackPlanejada: boolean) => {
+    const carregar = async (modo: "otimizada" | "planejadaNula" | "planejadaVazia") => {
       const resultado: LinhaRota[] = [];
       for (let from = 0; ; from += PAGE) {
-        let query = supabase
+        let query = supabaseAdmin
           .from("escalas")
           .select("id, shipment, cidade, triado")
           .eq("importacao_id", impAtiva.id)
           .not("shipment", "is", null)
           .neq("shipment", "");
-        query = fallbackPlanejada
-          ? query.is("otimizada", null).eq("planejada", data.rota)
-          : query.eq("otimizada", data.rota);
-        const { data: page, error } = await query
-          .order("id", { ascending: true })
-          .range(from, from + PAGE - 1);
+        if (modo === "otimizada") {
+          query = query.eq("otimizada", data.rota);
+        } else if (modo === "planejadaNula") {
+          query = query.is("otimizada", null).eq("planejada", data.rota);
+        } else {
+          query = query.eq("otimizada", "").eq("planejada", data.rota);
+        }
+        const { data: page, error } = await query.range(from, from + PAGE - 1);
         if (error) throw new Error(error.message);
         if (!page || page.length === 0) break;
         resultado.push(...page);
@@ -870,9 +875,18 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
       }
       return resultado;
     };
-    const [otimizadas, planejadasFallback] = await Promise.all([carregar(false), carregar(true)]);
+    const [otimizadas, planejadasNulas, planejadasVazias] = await Promise.all([
+      carregar("otimizada"),
+      carregar("planejadaNula"),
+      carregar("planejadaVazia"),
+    ]);
     const rows = Array.from(
-      new Map([...otimizadas, ...planejadasFallback].map((linha) => [linha.id, linha])).values(),
+      new Map(
+        [...otimizadas, ...planejadasNulas, ...planejadasVazias].map((linha) => [
+          linha.id,
+          linha,
+        ]),
+      ).values(),
     );
     const pendentes = rows
       .filter((r) => !r.triado && r.shipment)
