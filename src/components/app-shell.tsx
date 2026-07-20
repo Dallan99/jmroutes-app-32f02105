@@ -109,16 +109,17 @@ export function AppShell() {
     queryFn: () => fetchPerfil(),
     staleTime: 60_000,
   });
-  const roles = (perfilQuery.data?.roles ?? ["operador"]) as Array<Role>;
+  const rolesCarregadas = perfilQuery.isSuccess;
+  const roles = (perfilQuery.data?.roles ?? []) as Array<Role>;
   useInactivityLogout();
 
   return (
     <BaseOperacionalProvider>
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-background">
-          <AppSidebar roles={roles} />
+          <AppSidebar roles={roles} rolesCarregadas={rolesCarregadas} />
           <div className="flex-1 flex flex-col min-w-0">
-            <TopBar nome={perfilQuery.data?.profile?.nome ?? null} roles={roles} />
+            <TopBar nome={perfilQuery.data?.profile?.nome ?? null} roles={roles} rolesCarregadas={rolesCarregadas} />
             <main className="flex-1 min-w-0">
               <Outlet />
             </main>
@@ -129,7 +130,8 @@ export function AppShell() {
   );
 }
 
-function AppSidebar({ roles }: { roles: Array<Role> }) {
+function AppSidebar({ roles, rolesCarregadas }: { roles: Array<Role>; rolesCarregadas: boolean }) {
+
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
