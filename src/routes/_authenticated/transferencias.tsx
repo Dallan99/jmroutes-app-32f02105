@@ -30,6 +30,7 @@ import {
   proximaEtapa,
   registrarMarcoTransferencia,
   TRANSFERENCIA_ETAPAS,
+  TRANSFERENCIA_ETAPAS_ATIVAS,
   type TransferenciaDetalhe,
   type TransferenciaEtapa,
 } from "@/lib/transferencias.functions";
@@ -870,7 +871,7 @@ function TimelineHistorico({
     <Card className="p-4">
       <h3 className="font-semibold text-sm mb-3">Histórico</h3>
       <ol className="relative border-l ml-2 space-y-3">
-        {TRANSFERENCIA_ETAPAS.map((etapa) => {
+        {TRANSFERENCIA_ETAPAS_ATIVAS.map((etapa) => {
           const ev = eventoDe(transferencia, etapa.value);
           const ocorrencia = transferencia.ocorrencias.find((o) => o.etapa === etapa.value);
           const emEdicao = editandoEtapa === etapa.value;
