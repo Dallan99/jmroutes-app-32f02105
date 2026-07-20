@@ -9,6 +9,11 @@ export const TRANSFERENCIA_ETAPAS = [
   { value: "saida_xpt", label: "Saída do XPT" },
 ] as const;
 
+export const TRANSFERENCIA_ETAPAS_ATIVAS = TRANSFERENCIA_ETAPAS.filter(
+  (e) => e.value !== "saida_xpt",
+);
+
+
 export const TRANSFERENCIA_STATUS = [
   { value: "aguardando_chegada_service", label: "Aguardando chegada no Service" },
   { value: "no_service", label: "No Service / carregando" },
