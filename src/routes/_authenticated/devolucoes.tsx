@@ -421,7 +421,11 @@ function DevolucoesPage() {
               className="pl-9 h-12 text-lg font-mono"
             />
           </div>
-          <Button size="lg" onClick={() => abrirModal(codigo)} disabled={codigo.trim().length < 1}>
+          <Button
+            size="lg"
+            onClick={() => abrirModal(codigo)}
+            disabled={!rotaTravada || codigo.trim().length < 1}
+          >
             Registrar
           </Button>
           <DropdownMenu>
