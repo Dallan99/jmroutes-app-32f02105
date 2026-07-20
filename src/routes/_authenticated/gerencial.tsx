@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { gerencialData, rotasPorBase, transferenciasGerencial, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
+import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
   Line, LineChart, Legend,
 } from "recharts";
-import { Activity, AlertTriangle, Award, CheckCircle2, Clock, MapPin, PackageCheck, TrendingDown, TrendingUp, Truck, Tv, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, Award, CheckCircle2, ClipboardList, Clock, MapPin, Package, PackageCheck, RotateCcw, TrendingDown, TrendingUp, Truck, Tv, Users, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/gerencial")({
   head: () => ({ meta: [{ title: "Dashboard Gerencial — JM Transportes" }] }),
