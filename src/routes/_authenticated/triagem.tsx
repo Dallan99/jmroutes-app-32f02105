@@ -66,6 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RequireBaseOperacional } from "@/components/base-operacional-selector";
 import { useBaseOperacional } from "@/lib/base-operacional-context";
+import { ErroBloqueioOverlay } from "@/components/erro-bloqueio-overlay";
 
 export const Route = createFileRoute("/_authenticated/triagem")({
   head: () => ({ meta: [{ title: "Triagem — JM Transportes" }] }),
@@ -183,6 +184,7 @@ function TriagemPage() {
   );
   const [dialogRessalvaAberto, setDialogRessalvaAberto] = useState(false);
   const [motivoRessalva, setMotivoRessalva] = useState("");
+  const [bloqueioErro, setBloqueioErro] = useState<string | null>(null);
 
   const detalheQuery = useQuery({
     queryKey: ["triagem-pendentes", baseId, dataOperacional, rotaDetalhe],
@@ -341,7 +343,7 @@ function TriagemPage() {
       } else {
         beepError();
         setFlash("error");
-        toast.error(res.mensagem, { duration: 5000 });
+        setBloqueioErro(res.mensagem);
       }
       setSession((s) => ({
         ...s,
@@ -363,9 +365,8 @@ function TriagemPage() {
         paused: false,
         sessionErr: s.sessionErr + 1,
       }));
-      toast.error(err instanceof Error ? err.message : "Falha na triagem.");
+      setBloqueioErro(err instanceof Error ? err.message : "Falha na triagem.");
       setTimeout(() => setFlash(null), 500);
-      inputRef.current?.focus();
     },
   });
 
@@ -457,9 +458,8 @@ function TriagemPage() {
       }
       if (rotaConcluidaRessalva) {
         beepError();
-        toast.error(
+        setBloqueioErro(
           `A rota ${rotaSelecionada} foi concluída com ressalva e está bloqueada para novas bipagens.`,
-          { duration: 7000 },
         );
         setCodigo("");
         return;
@@ -684,6 +684,14 @@ function TriagemPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <ErroBloqueioOverlay
+        mensagem={bloqueioErro}
+        onOk={() => {
+          setBloqueioErro(null);
+          setCodigo("");
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
+      />
       {!modoRota ? (
         <>
           {/* KPIs gerais */}

@@ -162,3 +162,24 @@
 }
 @utility scan-flash-ok { animation: scan-pulse 0.6s ease-out; }
 @utility scan-flash-error { animation: scan-pulse-error 0.6s ease-out; }
+
+/* Overlay bloqueante de erro operacional — pisca vermelho forte */
+@keyframes erro-bloqueio-flash {
+  0%, 100% { background-color: rgba(220, 38, 38, 0.85); }
+  50%      { background-color: rgba(120, 0, 0, 0.95); }
+}
+@keyframes erro-bloqueio-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+.erro-bloqueio-backdrop {
+  animation: erro-bloqueio-flash 0.6s ease-in-out infinite;
+  backdrop-filter: blur(2px);
+}
+.erro-bloqueio-icone {
+  animation: erro-bloqueio-shake 0.5s ease-in-out infinite;
+}
+
