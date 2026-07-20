@@ -851,7 +851,7 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
       cidade: string | null;
       triado: boolean | null;
     };
-    const carregar = async (fallbackPlanejada: boolean) => {
+    const carregar = async (modo: "otimizada" | "planejadaNula" | "planejadaVazia") => {
       const resultado: LinhaRota[] = [];
       for (let from = 0; ; from += PAGE) {
         let query = supabaseAdmin
@@ -860,9 +860,13 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
           .eq("importacao_id", impAtiva.id)
           .not("shipment", "is", null)
           .neq("shipment", "");
-        query = fallbackPlanejada
-          ? query.eq("planejada", data.rota)
-          : query.eq("otimizada", data.rota);
+        if (modo === "otimizada") {
+          query = query.eq("otimizada", data.rota);
+        } else if (modo === "planejadaNula") {
+          query = query.is("otimizada", null).eq("planejada", data.rota);
+        } else {
+          query = query.eq("otimizada", "").eq("planejada", data.rota);
+        }
         const { data: page, error } = await query.range(from, from + PAGE - 1);
         if (error) throw new Error(error.message);
         if (!page || page.length === 0) break;
@@ -871,9 +875,18 @@ export const triagemShipmentsPendentes = createServerFn({ method: "GET" })
       }
       return resultado;
     };
-    const [otimizadas, planejadasFallback] = await Promise.all([carregar(false), carregar(true)]);
+    const [otimizadas, planejadasNulas, planejadasVazias] = await Promise.all([
+      carregar("otimizada"),
+      carregar("planejadaNula"),
+      carregar("planejadaVazia"),
+    ]);
     const rows = Array.from(
-      new Map([...otimizadas, ...planejadasFallback].map((linha) => [linha.id, linha])).values(),
+      new Map(
+        [...otimizadas, ...planejadasNulas, ...planejadasVazias].map((linha) => [
+          linha.id,
+          linha,
+        ]),
+      ).values(),
     );
     const pendentes = rows
       .filter((r) => !r.triado && r.shipment)
