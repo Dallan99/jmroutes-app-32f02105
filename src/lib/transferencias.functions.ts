@@ -9,6 +9,11 @@ export const TRANSFERENCIA_ETAPAS = [
   { value: "saida_xpt", label: "Saída do XPT" },
 ] as const;
 
+export const TRANSFERENCIA_ETAPAS_ATIVAS = TRANSFERENCIA_ETAPAS.filter(
+  (e) => e.value !== "saida_xpt",
+);
+
+
 export const TRANSFERENCIA_STATUS = [
   { value: "aguardando_chegada_service", label: "Aguardando chegada no Service" },
   { value: "no_service", label: "No Service / carregando" },
@@ -649,9 +654,9 @@ export function proximaEtapa(eventos: TransferenciaEvento[]): TransferenciaEtapa
   if (!etapas.has("chegada_service")) return "chegada_service";
   if (!etapas.has("saida_service")) return "saida_service";
   if (!etapas.has("chegada_xpt")) return "chegada_xpt";
-  if (!etapas.has("saida_xpt")) return "saida_xpt";
   return null;
 }
+
 
 export function caminhoEvidenciaTransferencia(
   baseId: string,

@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Camera,
-  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -31,6 +30,7 @@ import {
   proximaEtapa,
   registrarMarcoTransferencia,
   TRANSFERENCIA_ETAPAS,
+  TRANSFERENCIA_ETAPAS_ATIVAS,
   type TransferenciaDetalhe,
   type TransferenciaEtapa,
 } from "@/lib/transferencias.functions";
@@ -361,22 +361,6 @@ function TransferenciasPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao excluir."),
   });
 
-  const concluirMutation = useMutation({
-    mutationFn: (t: TransferenciaDetalhe) =>
-      marcoFn({
-        data: {
-          transferenciaId: t.id,
-          etapa: "saida_xpt",
-          ocorridoEm: new Date().toISOString(),
-          localizacaoTexto: "XPT",
-        },
-      }),
-    onSuccess: () => {
-      toast.success("Transferência concluída.");
-      refresh();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao concluir."),
-  });
 
   const statusOpcoes = useMemo(() => {
     const set = new Set<string>();
@@ -579,23 +563,9 @@ function TransferenciasPage() {
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title={
-                              proximaEtapa(t.eventos) === "saida_xpt"
-                                ? "Concluir transferência"
-                                : "Concluir disponível somente após chegada no XPT"
-                            }
-                            className="text-emerald-600"
-                            disabled={
-                              proximaEtapa(t.eventos) !== "saida_xpt" ||
-                              concluirMutation.isPending
-                            }
-                            onClick={() => concluirMutation.mutate(t)}
-                          >
-                            <Check className="w-4 h-4" />
-                          </Button>
+
+
+
                           {isAdmin && (
                             <Button
                               variant="ghost"
@@ -901,7 +871,7 @@ function TimelineHistorico({
     <Card className="p-4">
       <h3 className="font-semibold text-sm mb-3">Histórico</h3>
       <ol className="relative border-l ml-2 space-y-3">
-        {TRANSFERENCIA_ETAPAS.map((etapa) => {
+        {TRANSFERENCIA_ETAPAS_ATIVAS.map((etapa) => {
           const ev = eventoDe(transferencia, etapa.value);
           const ocorrencia = transferencia.ocorrencias.find((o) => o.etapa === etapa.value);
           const emEdicao = editandoEtapa === etapa.value;
@@ -1055,7 +1025,7 @@ function ProximaEtapaForm({
   const etapaAtiva = etapa
     ? etapa
     : modoCorrigir
-      ? ("saida_xpt" as TransferenciaEtapa)
+      ? ("chegada_xpt" as TransferenciaEtapa)
       : null;
 
   return (
