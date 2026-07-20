@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   Camera,
-  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -563,17 +562,8 @@ function TransferenciasPage() {
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Editar"
-                            onClick={() => setEditando(t)}
-                            className="hidden"
-                            aria-hidden
-                            tabIndex={-1}
-                          >
-                            <Check className="w-4 h-4" />
-                          </Button>
+
+
 
                           {isAdmin && (
                             <Button
