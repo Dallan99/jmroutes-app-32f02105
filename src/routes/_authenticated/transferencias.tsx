@@ -361,22 +361,6 @@ function TransferenciasPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao excluir."),
   });
 
-  const concluirMutation = useMutation({
-    mutationFn: (t: TransferenciaDetalhe) =>
-      marcoFn({
-        data: {
-          transferenciaId: t.id,
-          etapa: "saida_xpt",
-          ocorridoEm: new Date().toISOString(),
-          localizacaoTexto: "XPT",
-        },
-      }),
-    onSuccess: () => {
-      toast.success("Transferência concluída.");
-      refresh();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao concluir."),
-  });
 
   const statusOpcoes = useMemo(() => {
     const set = new Set<string>();
@@ -582,20 +566,15 @@ function TransferenciasPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            title={
-                              proximaEtapa(t.eventos) === "saida_xpt"
-                                ? "Concluir transferência"
-                                : "Concluir disponível somente após chegada no XPT"
-                            }
-                            className="text-emerald-600"
-                            disabled={
-                              proximaEtapa(t.eventos) !== "saida_xpt" ||
-                              concluirMutation.isPending
-                            }
-                            onClick={() => concluirMutation.mutate(t)}
+                            title="Editar"
+                            onClick={() => setEditando(t)}
+                            className="hidden"
+                            aria-hidden
+                            tabIndex={-1}
                           >
                             <Check className="w-4 h-4" />
                           </Button>
+
                           {isAdmin && (
                             <Button
                               variant="ghost"

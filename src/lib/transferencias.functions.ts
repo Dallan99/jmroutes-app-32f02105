@@ -649,9 +649,9 @@ export function proximaEtapa(eventos: TransferenciaEvento[]): TransferenciaEtapa
   if (!etapas.has("chegada_service")) return "chegada_service";
   if (!etapas.has("saida_service")) return "saida_service";
   if (!etapas.has("chegada_xpt")) return "chegada_xpt";
-  if (!etapas.has("saida_xpt")) return "saida_xpt";
   return null;
 }
+
 
 export function caminhoEvidenciaTransferencia(
   baseId: string,
