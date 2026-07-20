@@ -302,6 +302,15 @@ function DevolucoesPage() {
 
   const [rotaDialogOpen, setRotaDialogOpen] = useState(false);
   const [rotaBusca, setRotaBusca] = useState("");
+  const [rotasExpandidas, setRotasExpandidas] = useState<Set<string>>(new Set());
+  const toggleRotaExpandida = (chave: string) => {
+    setRotasExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
+      return next;
+    });
+  };
 
   type GrupoRota = { chave: string; rotaAlvo: string | null; label: string; total: number };
   const gruposPorRota = useMemo<GrupoRota[]>(() => {
