@@ -240,7 +240,7 @@ function TopBar({ nome, roles, rolesCarregadas }: { nome: string | null; roles: 
         <div className="text-right leading-tight">
           <div className="text-sm font-medium">{nome ?? "—"}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {principal}
+            {rolesCarregadas ? principal : "—"}
             {base && diaOperacional && (
               <>
                 {" · "}
@@ -248,6 +248,7 @@ function TopBar({ nome, roles, rolesCarregadas }: { nome: string | null; roles: 
               </>
             )}
           </div>
+
         </div>
         <div className="w-8 h-8 rounded-full brand-gradient text-white flex items-center justify-center text-xs font-bold uppercase">{(nome ?? "?").slice(0, 2)}</div>
         <Button variant="ghost" size="icon" onClick={logout} title="Sair">
