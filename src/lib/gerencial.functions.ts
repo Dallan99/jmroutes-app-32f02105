@@ -601,24 +601,51 @@ export type ResumoBaseRow = {
 };
 
 export type ResumoPorBaseData = {
-  dia: string; // YYYY-MM-DD
+  dia: string; // início do período (YYYY-MM-DD) — mantido para compat
+  periodo: "hoje" | "7d" | "30d";
+  inicio: string;
+  fim: string;
   bases: ResumoBaseRow[];
   totais: Omit<ResumoBaseRow, "base_id" | "codigo" | "nome">;
 };
 
 const resumoInputSchema = z.object({
   dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  periodo: z.enum(["hoje", "7d", "30d"]).optional(),
 });
+
+function ymd(d: Date): string {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
 
 export const resumoOperacionalPorBase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => resumoInputSchema.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<ResumoPorBaseData> => {
     const { supabase } = context;
-    const hoje = new Date();
-    const dia = data.dia ?? hoje.toISOString().slice(0, 10);
-    const iniISO = `${dia}T00:00:00.000Z`;
-    const fimISO = `${dia}T23:59:59.999Z`;
+
+    // Define intervalo. Se `periodo` for informado, prevalece sobre `dia`.
+    let inicio: string;
+    let fim: string;
+    const periodo = data.periodo ?? (data.dia ? "hoje" : "hoje");
+    if (data.periodo) {
+      const hoje = new Date();
+      fim = ymd(hoje);
+      if (data.periodo === "hoje") {
+        inicio = fim;
+      } else {
+        const dias = data.periodo === "7d" ? 6 : 29; // inclusivo
+        const ini = new Date(hoje.getTime() - dias * 24 * 3600 * 1000);
+        inicio = ymd(ini);
+      }
+    } else {
+      inicio = data.dia ?? ymd(new Date());
+      fim = inicio;
+    }
+
+    const iniISO = `${inicio}T00:00:00.000Z`;
+    const fimISO = `${fim}T23:59:59.999Z`;
 
     const { data: bases, error: basesErr } = await supabase
       .from("bases")
@@ -639,64 +666,64 @@ export const resumoOperacionalPorBase = createServerFn({ method: "POST" })
 
     const OK = new Set(["ok", "primeira_leitura", "concluiu_rota"]);
 
-    // Recebimentos (triagem)
-    const { data: rec } = await supabase
-      .from("recebimentos")
-      .select("base_id, resultado, data_operacional")
-      .eq("data_operacional", dia)
-      .limit(50000);
-    for (const r of (rec ?? []) as Array<{ base_id: string | null; resultado: string }>) {
+    const [recRes, devRes, invRes, transfRes, cntRes] = await Promise.all([
+      supabase
+        .from("recebimentos")
+        .select("base_id, resultado, data_operacional")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .limit(100000),
+      supabase
+        .from("devolucoes")
+        .select("base_id, devolvido_em, cancelado")
+        .gte("devolvido_em", iniISO)
+        .lte("devolvido_em", fimISO)
+        .limit(100000),
+      supabase
+        .from("inventario_leituras")
+        .select("base_id, dia_operacional")
+        .gte("dia_operacional", inicio)
+        .lte("dia_operacional", fim)
+        .limit(100000),
+      supabase
+        .from("transferencias")
+        .select("base_id, data_operacional, status")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .limit(100000),
+      supabase
+        .from("contagens")
+        .select("base_id, data_operacional")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .limit(100000),
+    ]);
+
+    for (const r of (recRes.data ?? []) as Array<{ base_id: string | null; resultado: string }>) {
       if (!r.base_id) continue;
       const cur = map.get(r.base_id);
       if (!cur) continue;
       cur.recebimentos++;
       if (OK.has(r.resultado)) cur.triados++;
     }
-
-    // Devoluções (usa devolvido_em)
-    const { data: dev } = await supabase
-      .from("devolucoes")
-      .select("base_id, devolvido_em, cancelado")
-      .gte("devolvido_em", iniISO)
-      .lte("devolvido_em", fimISO)
-      .limit(50000);
-    for (const d of (dev ?? []) as Array<{ base_id: string | null; cancelado: boolean | null }>) {
+    for (const d of (devRes.data ?? []) as Array<{ base_id: string | null; cancelado: boolean | null }>) {
       if (!d.base_id || d.cancelado) continue;
       const cur = map.get(d.base_id);
       if (cur) cur.devolucoes++;
     }
-
-    // Inventário
-    const { data: inv } = await supabase
-      .from("inventario_leituras")
-      .select("base_id, dia_operacional")
-      .eq("dia_operacional", dia)
-      .limit(50000);
-    for (const r of (inv ?? []) as Array<{ base_id: string | null }>) {
+    for (const r of (invRes.data ?? []) as Array<{ base_id: string | null }>) {
       if (!r.base_id) continue;
       const cur = map.get(r.base_id);
       if (cur) cur.inventario++;
     }
-
-    // Transferências
-    const { data: transf } = await supabase
-      .from("transferencias")
-      .select("base_id, data_operacional")
-      .eq("data_operacional", dia)
-      .limit(50000);
-    for (const r of (transf ?? []) as Array<{ base_id: string | null }>) {
+    for (const r of (transfRes.data ?? []) as Array<{ base_id: string | null; status: string | null }>) {
       if (!r.base_id) continue;
+      // Não conta transferências canceladas.
+      if (r.status === "cancelada") continue;
       const cur = map.get(r.base_id);
       if (cur) cur.transferencias++;
     }
-
-    // Contagens
-    const { data: cnt } = await supabase
-      .from("contagens")
-      .select("base_id, data_operacional")
-      .eq("data_operacional", dia)
-      .limit(50000);
-    for (const r of (cnt ?? []) as Array<{ base_id: string | null }>) {
+    for (const r of (cntRes.data ?? []) as Array<{ base_id: string | null }>) {
       if (!r.base_id) continue;
       const cur = map.get(r.base_id);
       if (cur) cur.contagens++;
@@ -721,5 +748,5 @@ export const resumoOperacionalPorBase = createServerFn({ method: "POST" })
       zeroRow(),
     );
 
-    return { dia, bases: rows, totais };
+    return { dia: inicio, periodo, inicio, fim, bases: rows, totais };
   });
