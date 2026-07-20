@@ -587,7 +587,17 @@ function DevolucoesPage() {
             <Button variant="outline" onClick={() => setPendente(null)}>
               Cancelar
             </Button>
-            <Button onClick={() => registrar.mutate()} disabled={registrar.isPending}>
+            <Button
+              onClick={() =>
+                registrar.mutate({
+                  codigo: pendente!,
+                  motivo,
+                  observacao: obs.trim() ? obs.trim() : undefined,
+                  rota: rotaInput.trim() ? rotaInput.trim() : undefined,
+                })
+              }
+              disabled={registrar.isPending}
+            >
               {registrar.isPending ? (
                 "Salvando…"
               ) : (
