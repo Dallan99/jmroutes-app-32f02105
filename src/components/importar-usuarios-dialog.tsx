@@ -121,6 +121,8 @@ function validar(l: Omit<Linha, "linha" | "erro">): string | undefined {
   if (!["admin", "gerente", "supervisor", "operador"].includes(l.role))
     return "Role deve ser admin|gerente|supervisor|operador.";
   if (l.role === "operador" && !l.base_codigo) return "Operador exige base_codigo.";
+  if (l.base_codigo && !BASES_VALIDAS.includes(l.base_codigo as (typeof BASES_VALIDAS)[number]))
+    return `Base inválida: use ${BASES_VALIDAS.join(", ")} ou o nome (ex.: "Base de Ibiúna", "São Lourenço ESP17").`;
   if (l.senha.length < 8) return "Senha muito curta (mínimo 8).";
   return undefined;
 }
