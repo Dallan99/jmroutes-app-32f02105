@@ -51,6 +51,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -61,10 +62,14 @@ function AuthPage() {
   const [forgotLoading, setForgotLoading] = useState(false);
 
   useEffect(() => {
+    setHydrated(true);
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/inicio", replace: true });
     });
   }, [navigate]);
+
+  if (!hydrated) return null;
+
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
