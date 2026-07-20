@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, KeyRound, Power, Trash2, ShieldAlert } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ImportarUsuariosDialog } from "@/components/importar-usuarios-dialog";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
   ssr: false,
