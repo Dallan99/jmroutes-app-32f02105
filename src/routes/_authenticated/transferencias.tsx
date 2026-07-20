@@ -208,7 +208,7 @@ function TransferenciasGuard() {
 // Página principal
 // ============================================================
 function TransferenciasPage() {
-  const { base, diaOperacional } = useBaseOperacional();
+  const { base, diaOperacional, limpar } = useBaseOperacional();
   const listarFn = useServerFn(listarTransferencias);
   const contextoFn = useServerFn(contextoBaseOperacional);
   const criarLoteFn = useServerFn(criarTransferenciasLote);
@@ -258,7 +258,7 @@ function TransferenciasPage() {
     const placaTermo = placaFiltro.trim().toLocaleUpperCase("pt-BR");
     return (lista.data ?? []).filter((t) => {
       if (t.status === "cancelada") return false;
-      if (!serviceBase && serviceFiltro !== "todos" && t.service !== serviceFiltro) return false;
+      if (serviceFiltro !== "todos" && t.service !== serviceFiltro) return false;
       if (statusFiltro !== "todos") {
         const grupo = statusInfo(t.status).label;
         if (grupo !== statusFiltro) return false;
@@ -382,6 +382,13 @@ function TransferenciasPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
+            onClick={() => limpar()}
+            title="Trocar base / Service"
+          >
+            Trocar base / Service
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => refresh()}
             disabled={lista.isFetching}
             title="Atualizar"
@@ -404,23 +411,21 @@ function TransferenciasPage() {
           </div>
           <div>
             <Label>Service</Label>
-            {serviceBase ? (
-              <Input value={serviceBase} disabled className="font-semibold" />
-            ) : (
-              <Select value={serviceFiltro} onValueChange={setServiceFiltro}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os Services</SelectItem>
-                  {services.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={serviceFiltro} onValueChange={setServiceFiltro}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">
+                  {serviceBase ? `Todos (padrão ${serviceBase})` : "Todos os Services"}
+                </SelectItem>
+                {services.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Data</Label>
