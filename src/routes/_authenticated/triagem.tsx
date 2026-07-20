@@ -458,9 +458,8 @@ function TriagemPage() {
       }
       if (rotaConcluidaRessalva) {
         beepError();
-        toast.error(
+        setBloqueioErro(
           `A rota ${rotaSelecionada} foi concluída com ressalva e está bloqueada para novas bipagens.`,
-          { duration: 7000 },
         );
         setCodigo("");
         return;
