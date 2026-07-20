@@ -325,3 +325,141 @@ export const setUserBases = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+const importarSchema = z.object({
+  usuarios: z
+    .array(
+      z.object({
+        email: z.string().trim().toLowerCase().email(),
+        nome: z.string().trim().min(2).max(120),
+        senha: z.string().min(8).max(72),
+        role: z.enum(["admin", "gerente", "supervisor", "operador"]),
+        matricula: z.string().trim().max(40).optional().nullable(),
+        base_codigo: z.string().trim().max(20).optional().nullable(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export type ImportarUsuarioResultado = {
+  linha: number;
+  email: string;
+  status: "criado" | "ja_existia" | "erro";
+  mensagem?: string;
+  senha_temporaria?: string;
+};
+
+export const importarUsuarios = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => importarSchema.parse(d))
+  .handler(async ({ data, context }): Promise<ImportarUsuarioResultado[]> => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Mapa codigo -> base_id
+    const { data: basesRows } = await supabaseAdmin.from("bases").select("id, codigo");
+    const baseByCodigo = new Map<string, string>();
+    for (const b of basesRows ?? []) {
+      if (b.codigo) baseByCodigo.set(String(b.codigo).toUpperCase(), b.id);
+    }
+
+    const resultados: ImportarUsuarioResultado[] = [];
+    let linha = 1;
+    for (const u of data.usuarios) {
+      linha++;
+      try {
+        if (!u.email.endsWith("@jmdistribuicao.com.br")) {
+          resultados.push({
+            linha,
+            email: u.email,
+            status: "erro",
+            mensagem: "Domínio não permitido (apenas @jmdistribuicao.com.br).",
+          });
+          continue;
+        }
+        let base_id: string | null = null;
+        if (u.base_codigo) {
+          base_id = baseByCodigo.get(u.base_codigo.toUpperCase()) ?? null;
+          if (!base_id) {
+            resultados.push({
+              linha,
+              email: u.email,
+              status: "erro",
+              mensagem: `Base '${u.base_codigo}' não encontrada.`,
+            });
+            continue;
+          }
+        }
+        if (u.role === "operador" && !base_id) {
+          resultados.push({
+            linha,
+            email: u.email,
+            status: "erro",
+            mensagem: "Operador exige base.",
+          });
+          continue;
+        }
+
+        const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+          email: u.email,
+          password: u.senha,
+          email_confirm: true,
+          user_metadata: { nome: u.nome },
+        });
+        if (error) {
+          const msg = error.message.toLowerCase();
+          if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+            resultados.push({ linha, email: u.email, status: "ja_existia" });
+          } else {
+            resultados.push({ linha, email: u.email, status: "erro", mensagem: error.message });
+          }
+          continue;
+        }
+        const uid = created.user.id;
+
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            nome: u.nome,
+            matricula: u.matricula ?? null,
+            base_id,
+          })
+          .eq("id", uid);
+
+        if (u.role !== "operador") {
+          await supabaseAdmin.from("user_roles").delete().eq("user_id", uid).eq("role", "operador");
+          await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: u.role });
+        }
+
+        resultados.push({
+          linha,
+          email: u.email,
+          status: "criado",
+          senha_temporaria: u.senha,
+        });
+      } catch (e) {
+        resultados.push({
+          linha,
+          email: u.email,
+          status: "erro",
+          mensagem: e instanceof Error ? e.message : "Erro desconhecido.",
+        });
+      }
+    }
+
+    const { registrarAuditInterno } = await import("./audit.server");
+    await registrarAuditInterno(context.supabase, context.userId, {
+      acao: "usuario.importado",
+      entidade: "usuario",
+      entidade_id: null,
+      detalhes: {
+        total: resultados.length,
+        criados: resultados.filter((r) => r.status === "criado").length,
+        ja_existiam: resultados.filter((r) => r.status === "ja_existia").length,
+        erros: resultados.filter((r) => r.status === "erro").length,
+      },
+    });
+
+    return resultados;
+  });
