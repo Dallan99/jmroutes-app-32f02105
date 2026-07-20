@@ -116,30 +116,41 @@ export const concluirRotaComRessalva = createServerFn({
         );
       }
 
-      // Contagem via agregação no Postgres para evitar statement timeout ao
-      // paginar milhares de linhas quando a importação é grande.
+      // Contagem via agregação no Postgres para evitar statement timeout.
       // Rota efetiva = otimizada (se preenchida) senão planejada.
+      // Usamos queries separadas em vez de .or() com and() aninhado porque
+      // o PostgREST não otimiza esse filtro composto e cai em seq scan.
       const rotaFiltro = data.rota;
-      const filtroRotaEfetiva = `and(otimizada.eq.${rotaFiltro}),and(otimizada.is.null,planejada.eq.${rotaFiltro}),and(otimizada.eq.,planejada.eq.${rotaFiltro})`;
-
-      const baseQuery = () =>
+      const baseQ = () =>
         supabase
           .from("escalas")
           .select("id", { count: "exact", head: true })
           .eq("importacao_id", importacao.id)
           .not("shipment", "is", null)
-          .neq("shipment", "")
-          .or(filtroRotaEfetiva);
+          .neq("shipment", "");
 
-      const { count: previstosCount, error: previstosErro } = await baseQuery();
-      if (previstosErro) throw new Error(previstosErro.message);
+      const [
+        { count: prevOtim, error: e1 },
+        { count: prevPlanNull, error: e2 },
+        { count: prevPlanEmpty, error: e3 },
+        { count: triOtim, error: e4 },
+        { count: triPlanNull, error: e5 },
+        { count: triPlanEmpty, error: e6 },
+      ] = await Promise.all([
+        baseQ().eq("otimizada", rotaFiltro),
+        baseQ().is("otimizada", null).eq("planejada", rotaFiltro),
+        baseQ().eq("otimizada", "").eq("planejada", rotaFiltro),
+        baseQ().eq("otimizada", rotaFiltro).eq("triado", true),
+        baseQ().is("otimizada", null).eq("planejada", rotaFiltro).eq("triado", true),
+        baseQ().eq("otimizada", "").eq("planejada", rotaFiltro).eq("triado", true),
+      ]);
+      const err = e1 || e2 || e3 || e4 || e5 || e6;
+      if (err) throw new Error(err.message);
 
-      const { count: triadosCount, error: triadosErro } = await baseQuery().eq("triado", true);
-      if (triadosErro) throw new Error(triadosErro.message);
-
-      const previstos = previstosCount ?? 0;
-      const triados = triadosCount ?? 0;
+      const previstos = (prevOtim ?? 0) + (prevPlanNull ?? 0) + (prevPlanEmpty ?? 0);
+      const triados = (triOtim ?? 0) + (triPlanNull ?? 0) + (triPlanEmpty ?? 0);
       const faltantes = Math.max(previstos - triados, 0);
+
 
       if (previstos === 0) {
         throw new Error("Rota não encontrada na importação ativa.");
