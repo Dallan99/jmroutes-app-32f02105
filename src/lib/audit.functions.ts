@@ -18,9 +18,21 @@ export type AuditRow = {
   usuario_email: string | null;
 };
 
+// Ações permitidas ao cliente. Qualquer outra origem deve gravar audit_logs
+// via caminhos server-side confiáveis (RPCs SECURITY DEFINER, funções .server).
+const ACOES_CLIENTE_PERMITIDAS = [
+  "login",
+  "logout",
+  "logout.inatividade",
+  "export.abrir",
+  "export.imprimir",
+] as const;
+
+const ENTIDADES_CLIENTE_PERMITIDAS = ["auth", "export"] as const;
+
 const registrarSchema = z.object({
-  acao: z.string().trim().min(2).max(80),
-  entidade: z.string().trim().max(80).optional().nullable(),
+  acao: z.enum(ACOES_CLIENTE_PERMITIDAS),
+  entidade: z.enum(ENTIDADES_CLIENTE_PERMITIDAS).optional().nullable(),
   entidade_id: z.string().trim().max(120).optional().nullable(),
   detalhes: z.record(z.string(), z.unknown()).optional().nullable(),
 });
@@ -31,7 +43,17 @@ export const registrarAudit = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => registrarSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { registrarAuditInterno } = await import("./audit.server");
-    await registrarAuditInterno(context.supabase, context.userId, data);
+    // Força entidade a um domínio seguro derivado da ação e descarta
+    // entidade_id do cliente, impedindo forja de registros contra
+    // recursos que o autor não controla.
+    const entidade =
+      data.entidade ?? (data.acao.startsWith("export.") ? "export" : "auth");
+    await registrarAuditInterno(context.supabase, context.userId, {
+      acao: data.acao,
+      entidade,
+      entidade_id: null,
+      detalhes: data.detalhes ?? null,
+    });
     return { ok: true };
   });
 
