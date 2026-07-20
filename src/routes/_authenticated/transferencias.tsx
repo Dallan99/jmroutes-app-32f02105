@@ -1024,7 +1024,7 @@ function ProximaEtapaForm({
   const etapaAtiva = etapa
     ? etapa
     : modoCorrigir
-      ? ("saida_xpt" as TransferenciaEtapa)
+      ? ("chegada_xpt" as TransferenciaEtapa)
       : null;
 
   return (
