@@ -104,9 +104,12 @@ function UsuariosPage() {
           <h1 className="font-display text-2xl font-bold">Usuários</h1>
           <p className="text-sm text-muted-foreground">Criação, edição e controle de acesso da equipe.</p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpenForm(true); }}>
-          <Plus className="w-4 h-4 mr-2" /> Novo usuário
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportarUsuariosDialog />
+          <Button onClick={() => { setEditing(null); setOpenForm(true); }}>
+            <Plus className="w-4 h-4 mr-2" /> Novo usuário
+          </Button>
+        </div>
       </div>
 
       <Card className="p-0 overflow-hidden">
