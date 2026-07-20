@@ -48,6 +48,8 @@ import {
   Trash2,
   Printer,
   Download,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
 import {
@@ -300,6 +302,15 @@ function DevolucoesPage() {
 
   const [rotaDialogOpen, setRotaDialogOpen] = useState(false);
   const [rotaBusca, setRotaBusca] = useState("");
+  const [rotasExpandidas, setRotasExpandidas] = useState<Set<string>>(new Set());
+  const toggleRotaExpandida = (chave: string) => {
+    setRotasExpandidas((prev) => {
+      const next = new Set(prev);
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
+      return next;
+    });
+  };
 
   type GrupoRota = { chave: string; rotaAlvo: string | null; label: string; total: number };
   const gruposPorRota = useMemo<GrupoRota[]>(() => {
@@ -554,75 +565,123 @@ function DevolucoesPage() {
           </div>
           <span className="text-xs text-muted-foreground">{lista.data?.length ?? 0} registros</span>
         </div>
-        <div className="overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Horário</TableHead>
-                <TableHead>ID do produto</TableHead>
-                <TableHead>Rota</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Motivo</TableHead>
-                <TableHead>Operador</TableHead>
-                <TableHead>Obs.</TableHead>
-                <TableHead className="w-16"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lista.isLoading && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
-                    Carregando…
-                  </TableCell>
-                </TableRow>
-              )}
-              {!lista.isLoading && (lista.data?.length ?? 0) === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
-                    Nenhuma devolução registrada hoje.
-                  </TableCell>
-                </TableRow>
-              )}
-              {(lista.data ?? []).map((d) => {
-                const motivoLabel = MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo;
+        <div className="p-2 md:p-3">
+          {lista.isLoading && (
+            <div className="text-center text-sm text-muted-foreground py-6">Carregando…</div>
+          )}
+          {!lista.isLoading && gruposPorRota.length === 0 && (
+            <div className="text-center text-sm text-muted-foreground py-6">
+              Nenhuma devolução registrada{consultandoHoje ? " hoje" : " neste dia"}.
+            </div>
+          )}
+          {!lista.isLoading && gruposPorRota.length > 0 && (
+            <div className="space-y-2">
+              {gruposPorRota.map((g) => {
+                const expandido = rotasExpandidas.has(g.chave);
+                const linhasRota = filtrarDevolucoesPorRota(lista.data ?? [], g.rotaAlvo).sort(
+                  (a, b) =>
+                    new Date(a.devolvido_em).getTime() - new Date(b.devolvido_em).getTime(),
+                );
                 return (
-                  <TableRow key={d.id} className={d.cancelado ? "opacity-50 line-through" : ""}>
-                    <TableCell className="font-mono text-xs">
-                      {new Date(d.devolvido_em).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </TableCell>
-                    <TableCell className="font-mono">{d.shipment_codigo}</TableCell>
-                    <TableCell className="font-mono text-xs">{d.rota ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{d.motorista ?? "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{motivoLabel}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">{d.operador_nome ?? "—"}</TableCell>
-                    <TableCell
-                      className="text-xs max-w-[220px] truncate"
-                      title={d.observacao ?? ""}
-                    >
-                      {d.observacao ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      {!d.cancelado && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => cancelar.mutate(d.id)}
-                          title="Cancelar devolução"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                  <div key={g.chave} className="border rounded-md overflow-hidden">
+                    <div className="flex items-center gap-2 p-2 bg-muted/40 hover:bg-muted/60">
+                      <button
+                        type="button"
+                        onClick={() => toggleRotaExpandida(g.chave)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        aria-expanded={expandido}
+                      >
+                        {expandido ? (
+                          <ChevronDown className="w-4 h-4 shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 shrink-0" />
+                        )}
+                        <span className="font-mono font-semibold truncate">{g.label}</span>
+                        <Badge variant="secondary" className="ml-1 shrink-0">
+                          {g.total} {g.total === 1 ? "volume" : "volumes"}
+                        </Badge>
+                      </button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => imprimirRotaEspecifica(g)}
+                        className="h-8 gap-1 text-xs"
+                        title="Imprimir esta rota"
+                      >
+                        <Printer className="w-3 h-3" /> Imprimir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => baixarCsvRota(g)}
+                        className="h-8 gap-1 text-xs"
+                        title="Baixar CSV desta rota"
+                      >
+                        <Download className="w-3 h-3" /> CSV
+                      </Button>
+                    </div>
+                    {expandido && (
+                      <div className="overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[90px]">Horário</TableHead>
+                              <TableHead>ID do produto</TableHead>
+                              <TableHead>Motorista</TableHead>
+                              <TableHead>Motivo</TableHead>
+                              <TableHead>Operador</TableHead>
+                              <TableHead>Obs.</TableHead>
+                              <TableHead className="w-12"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {linhasRota.map((d) => {
+                              const motivoLabel =
+                                MOTIVOS.find((m) => m.value === d.motivo)?.label ?? d.motivo;
+                              return (
+                                <TableRow key={d.id}>
+                                  <TableCell className="font-mono text-xs">
+                                    {new Date(d.devolvido_em).toLocaleTimeString("pt-BR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </TableCell>
+                                  <TableCell className="font-mono">{d.shipment_codigo}</TableCell>
+                                  <TableCell className="text-xs">{d.motorista ?? "—"}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">{motivoLabel}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {d.operador_nome ?? "—"}
+                                  </TableCell>
+                                  <TableCell
+                                    className="text-xs max-w-[220px] truncate"
+                                    title={d.observacao ?? ""}
+                                  >
+                                    {d.observacao ?? "—"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => cancelar.mutate(d.id)}
+                                      title="Cancelar devolução"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
-            </TableBody>
-          </Table>
+            </div>
+          )}
         </div>
       </Card>
 
