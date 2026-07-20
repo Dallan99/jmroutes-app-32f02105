@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { gerencialData, rotasPorBase, transferenciasGerencial, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
+import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import {
   Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
   Line, LineChart, Legend,
 } from "recharts";
-import { Activity, AlertTriangle, Award, CheckCircle2, Clock, MapPin, PackageCheck, TrendingDown, TrendingUp, Truck, Tv, Users, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, Award, CheckCircle2, ClipboardList, Clock, MapPin, Package, PackageCheck, RotateCcw, TrendingDown, TrendingUp, Truck, Tv, Users, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/gerencial")({
   head: () => ({ meta: [{ title: "Dashboard Gerencial — JM Transportes" }] }),
@@ -70,6 +70,9 @@ function GerencialPage() {
           </div>
         </div>
       </div>
+
+      <ResumoPorBasePanel />
+
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
         <Kpi label="Total leituras" value={d?.totais.total_leituras ?? "—"} icon={Activity} />
@@ -609,6 +612,102 @@ function Kpi({
         <Icon className={`w-4 h-4 ${ring}`} />
       </div>
       <div className="font-display text-2xl md:text-3xl font-bold">{value}</div>
+    </Card>
+  );
+}
+
+// ============================================================
+// Painel: Resumo Operacional por Base (ESP15/16/17/18)
+// Filtro por dia + botões de base + tiles com atividades.
+// ============================================================
+function ResumoPorBasePanel() {
+  const [dia, setDia] = useState<string>(todayYMD());
+  const [baseSel, setBaseSel] = useState<string>("todas");
+  const fn = useServerFn(resumoOperacionalPorBase);
+  const q = useQuery({
+    queryKey: ["resumo-por-base", dia],
+    queryFn: () => fn({ data: { dia } }),
+    refetchInterval: 30_000,
+  });
+
+  const bases = q.data?.bases ?? [];
+  const totais = q.data?.totais;
+  const baseAtiva = baseSel === "todas" ? null : bases.find((b) => b.base_id === baseSel);
+  const view = baseAtiva ?? {
+    codigo: "TODAS",
+    nome: "Todas as bases",
+    ...(totais ?? { triados: 0, recebimentos: 0, devolucoes: 0, inventario: 0, transferencias: 0, contagens: 0 }),
+  };
+
+  const codigos = ["ESP15", "ESP16", "ESP17", "ESP18"] as const;
+
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" /> Resumo operacional por base
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Atividades do dia selecionado. Clique em uma base para detalhar.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">Dia</label>
+          <Input
+            type="date"
+            value={dia}
+            onChange={(e) => setDia(e.target.value)}
+            className="h-9 w-[160px]"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant={baseSel === "todas" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setBaseSel("todas")}
+        >
+          Todas
+        </Button>
+        {codigos.map((cod) => {
+          const b = bases.find((x) => x.codigo === cod);
+          if (!b) return null;
+          const isActive = baseSel === b.base_id;
+          return (
+            <Button
+              key={cod}
+              variant={isActive ? "default" : "outline"}
+              size="sm"
+              onClick={() => setBaseSel(b.base_id)}
+              title={b.nome}
+            >
+              {cod}
+            </Button>
+          );
+        })}
+      </div>
+
+      <div>
+        <div className="text-xs text-muted-foreground mb-2">
+          Exibindo: <span className="font-medium text-foreground">{view.codigo}</span>
+          {view.nome && view.codigo !== "TODAS" ? ` — ${view.nome}` : ""}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <Kpi label="Volumes triados" value={view.triados} icon={PackageCheck} accent="success" />
+          <Kpi label="Recebimentos" value={view.recebimentos} icon={Activity} />
+          <Kpi label="Devoluções" value={view.devolucoes} icon={RotateCcw} accent="destructive" />
+          <Kpi label="Inventário" value={view.inventario} icon={Package} accent="info" />
+          <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
+          <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
+        </div>
+      </div>
+
+      {q.isLoading && <p className="text-xs text-muted-foreground">Carregando…</p>}
+      {q.error && (
+        <p className="text-xs text-destructive">Erro ao carregar: {(q.error as Error).message}</p>
+      )}
     </Card>
   );
 }

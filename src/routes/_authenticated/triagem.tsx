@@ -32,7 +32,7 @@ import {
   XCircle,
   AlertTriangle,
   ScanLine,
-  Timer,
+  
   Package,
   PackageCheck,
   PackageX,
@@ -649,11 +649,6 @@ function TriagemPage() {
   const pendentes = resumo.data?.pendentes ?? 0;
   const pct = totalPrev ? Math.round((totalTri / totalPrev) * 100) : 0;
 
-  const elapsedMs = accumulatedMs + (startedAt && !paused ? now - startedAt : 0);
-  const elapsed = Math.floor(elapsedMs / 1000);
-  const hh = String(Math.floor(elapsed / 3600)).padStart(2, "0");
-  const mm = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
-  const ss = String(elapsed % 60).padStart(2, "0");
 
   const flashClass = flash === "ok" ? "scan-flash-ok" : flash === "error" ? "scan-flash-error" : "";
 
@@ -681,7 +676,7 @@ function TriagemPage() {
               label="Meus hoje"
               value={(resumo.data?.meusHoje ?? 0).toLocaleString("pt-BR")}
             />
-            <Kpi icon={Timer} label="Tempo da sessão" value={`${hh}:${mm}:${ss}`} />
+            
           </div>
           <Progress value={pct} className="h-2" />
 

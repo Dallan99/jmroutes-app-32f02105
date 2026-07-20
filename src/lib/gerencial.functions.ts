@@ -583,3 +583,143 @@ export const rotasPorBase = createServerFn({ method: "POST" })
 
     return { data: dia, bases: resumoBases, rotas };
   });
+
+// ============================================================
+// Resumo operacional por base (usado no Dashboard Gerencial)
+// ============================================================
+
+export type ResumoBaseRow = {
+  base_id: string;
+  codigo: string;
+  nome: string;
+  triados: number;          // recebimentos com resultado "ok" / "primeira_leitura"
+  recebimentos: number;     // total de leituras registradas
+  devolucoes: number;
+  inventario: number;
+  transferencias: number;
+  contagens: number;
+};
+
+export type ResumoPorBaseData = {
+  dia: string; // YYYY-MM-DD
+  bases: ResumoBaseRow[];
+  totais: Omit<ResumoBaseRow, "base_id" | "codigo" | "nome">;
+};
+
+const resumoInputSchema = z.object({
+  dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const resumoOperacionalPorBase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => resumoInputSchema.parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<ResumoPorBaseData> => {
+    const { supabase } = context;
+    const hoje = new Date();
+    const dia = data.dia ?? hoje.toISOString().slice(0, 10);
+    const iniISO = `${dia}T00:00:00.000Z`;
+    const fimISO = `${dia}T23:59:59.999Z`;
+
+    const { data: bases, error: basesErr } = await supabase
+      .from("bases")
+      .select("id, codigo, nome")
+      .order("codigo");
+    if (basesErr) throw new Error(basesErr.message);
+
+    const zeroRow = () => ({
+      triados: 0,
+      recebimentos: 0,
+      devolucoes: 0,
+      inventario: 0,
+      transferencias: 0,
+      contagens: 0,
+    });
+    const map = new Map<string, ReturnType<typeof zeroRow>>();
+    for (const b of bases ?? []) map.set(b.id, zeroRow());
+
+    const OK = new Set(["ok", "primeira_leitura", "concluiu_rota"]);
+
+    // Recebimentos (triagem)
+    const { data: rec } = await supabase
+      .from("recebimentos")
+      .select("base_id, resultado, data_operacional")
+      .eq("data_operacional", dia)
+      .limit(50000);
+    for (const r of (rec ?? []) as Array<{ base_id: string | null; resultado: string }>) {
+      if (!r.base_id) continue;
+      const cur = map.get(r.base_id);
+      if (!cur) continue;
+      cur.recebimentos++;
+      if (OK.has(r.resultado)) cur.triados++;
+    }
+
+    // Devoluções (usa devolvido_em)
+    const { data: dev } = await supabase
+      .from("devolucoes")
+      .select("base_id, devolvido_em, cancelado")
+      .gte("devolvido_em", iniISO)
+      .lte("devolvido_em", fimISO)
+      .limit(50000);
+    for (const d of (dev ?? []) as Array<{ base_id: string | null; cancelado: boolean | null }>) {
+      if (!d.base_id || d.cancelado) continue;
+      const cur = map.get(d.base_id);
+      if (cur) cur.devolucoes++;
+    }
+
+    // Inventário
+    const { data: inv } = await supabase
+      .from("inventario_leituras")
+      .select("base_id, dia_operacional")
+      .eq("dia_operacional", dia)
+      .limit(50000);
+    for (const r of (inv ?? []) as Array<{ base_id: string | null }>) {
+      if (!r.base_id) continue;
+      const cur = map.get(r.base_id);
+      if (cur) cur.inventario++;
+    }
+
+    // Transferências
+    const { data: transf } = await supabase
+      .from("transferencias")
+      .select("base_id, data_operacional")
+      .eq("data_operacional", dia)
+      .limit(50000);
+    for (const r of (transf ?? []) as Array<{ base_id: string | null }>) {
+      if (!r.base_id) continue;
+      const cur = map.get(r.base_id);
+      if (cur) cur.transferencias++;
+    }
+
+    // Contagens
+    const { data: cnt } = await supabase
+      .from("contagens")
+      .select("base_id, data_operacional")
+      .eq("data_operacional", dia)
+      .limit(50000);
+    for (const r of (cnt ?? []) as Array<{ base_id: string | null }>) {
+      if (!r.base_id) continue;
+      const cur = map.get(r.base_id);
+      if (cur) cur.contagens++;
+    }
+
+    const rows: ResumoBaseRow[] = (bases ?? []).map((b) => ({
+      base_id: b.id,
+      codigo: b.codigo,
+      nome: b.nome,
+      ...(map.get(b.id) ?? zeroRow()),
+    }));
+
+    const totais = rows.reduce(
+      (acc, r) => ({
+        triados: acc.triados + r.triados,
+        recebimentos: acc.recebimentos + r.recebimentos,
+        devolucoes: acc.devolucoes + r.devolucoes,
+        inventario: acc.inventario + r.inventario,
+        transferencias: acc.transferencias + r.transferencias,
+        contagens: acc.contagens + r.contagens,
+      }),
+      zeroRow(),
+    );
+
+    return { dia, bases: rows, totais };
+  });
