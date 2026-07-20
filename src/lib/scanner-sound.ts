@@ -61,3 +61,23 @@ export function beepWarn() {
   beep(700, 110, "triangle", 0.2);
   setTimeout(() => beep(700, 110, "triangle", 0.2), 140);
 }
+
+// Alarme contínuo e ALTO para bloqueio de tela em erro operacional.
+let alarmTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startAlarm() {
+  if (alarmTimer) return;
+  const ciclo = () => {
+    beep(880, 320, "square", 1.0);
+    setTimeout(() => beep(560, 320, "square", 1.0), 320);
+  };
+  ciclo();
+  alarmTimer = setInterval(ciclo, 700);
+}
+
+export function stopAlarm() {
+  if (alarmTimer) {
+    clearInterval(alarmTimer);
+    alarmTimer = null;
+  }
+}
