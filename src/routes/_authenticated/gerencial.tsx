@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData } from "@/lib/gerencial.functions";
+import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, detalhesResumoPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData, type MetricaResumo } from "@/lib/gerencial.functions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -622,6 +623,7 @@ function Kpi({
 // ============================================================
 function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
   const [baseSel, setBaseSel] = useState<string>("todas");
+  const [drill, setDrill] = useState<{ metrica: MetricaResumo; baseId: string | null; label: string } | null>(null);
   const fn = useServerFn(resumoOperacionalPorBase);
   const q = useQuery({
     queryKey: ["resumo-por-base", periodo],
@@ -691,15 +693,36 @@ function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
         <div className="text-xs text-muted-foreground mb-2">
           Exibindo: <span className="font-medium text-foreground">{view.codigo}</span>
           {view.nome && view.codigo !== "TODAS" ? ` — ${view.nome}` : ""}
+          <span className="ml-2 text-muted-foreground/80">· clique em um card para ver os registros</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <Kpi label="Volumes triados" value={view.triados} icon={PackageCheck} accent="success" />
-          <Kpi label="Recebimentos" value={view.recebimentos} icon={Activity} />
-          <Kpi label="Devoluções" value={view.devolucoes} icon={RotateCcw} accent="destructive" />
-          <Kpi label="Inventário" value={view.inventario} icon={Package} accent="info" />
-          <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
-          <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
-        </div>
+        {(() => {
+          const baseIdSel = baseAtiva?.base_id ?? null;
+          const baseTag = baseAtiva ? ` (${baseAtiva.codigo})` : "";
+          const open = (m: MetricaResumo, label: string) =>
+            setDrill({ metrica: m, baseId: baseIdSel, label: label + baseTag });
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <button type="button" onClick={() => open("triados", "Volumes triados")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Volumes triados" value={view.triados} icon={PackageCheck} accent="success" />
+              </button>
+              <button type="button" onClick={() => open("recebimentos", "Recebimentos")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Recebimentos" value={view.recebimentos} icon={Activity} />
+              </button>
+              <button type="button" onClick={() => open("devolucoes", "Devoluções")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Devoluções" value={view.devolucoes} icon={RotateCcw} accent="destructive" />
+              </button>
+              <button type="button" onClick={() => open("inventario", "Inventário")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Inventário" value={view.inventario} icon={Package} accent="info" />
+              </button>
+              <button type="button" onClick={() => open("transferencias", "Transferências")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Transferências" value={view.transferencias} icon={Truck} />
+              </button>
+              <button type="button" onClick={() => open("contagens", "Contagens")} className="text-left focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                <Kpi label="Contagens" value={view.contagens} icon={ClipboardList} />
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="overflow-x-auto -mx-4 px-4">
@@ -716,20 +739,30 @@ function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
             </tr>
           </thead>
           <tbody>
-            {basesOrdenadas.map((b) => (
-              <tr key={b.base_id} className="border-b border-border/50 hover:bg-muted/30">
-                <td className="py-2 pr-3">
-                  <b>{b.nome}</b>
-                  <div className="text-[10px] text-muted-foreground font-mono">{b.codigo}</div>
+            {basesOrdenadas.map((b) => {
+              const cell = (m: MetricaResumo, val: number, extra = "") => (
+                <td
+                  className={`py-2 pr-3 text-right font-mono ${val > 0 ? "cursor-pointer hover:underline" : "text-muted-foreground"} ${extra}`}
+                  onClick={val > 0 ? () => setDrill({ metrica: m, baseId: b.base_id, label: `${labelMetrica(m)} (${b.codigo})` }) : undefined}
+                >
+                  {val.toLocaleString("pt-BR")}
                 </td>
-                <td className="py-2 pr-3 text-right font-mono">{b.recebimentos.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono text-success">{b.triados.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono text-warning">{b.devolucoes.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.transferencias.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.inventario.toLocaleString("pt-BR")}</td>
-                <td className="py-2 pr-3 text-right font-mono">{b.contagens.toLocaleString("pt-BR")}</td>
-              </tr>
-            ))}
+              );
+              return (
+                <tr key={b.base_id} className="border-b border-border/50 hover:bg-muted/30">
+                  <td className="py-2 pr-3">
+                    <b>{b.nome}</b>
+                    <div className="text-[10px] text-muted-foreground font-mono">{b.codigo}</div>
+                  </td>
+                  {cell("recebimentos", b.recebimentos)}
+                  {cell("triados", b.triados, "text-success")}
+                  {cell("devolucoes", b.devolucoes, "text-warning")}
+                  {cell("transferencias", b.transferencias)}
+                  {cell("inventario", b.inventario)}
+                  {cell("contagens", b.contagens)}
+                </tr>
+              );
+            })}
             {totais && basesOrdenadas.length > 0 && (
               <tr className="border-t-2 border-border font-semibold bg-muted/40">
                 <td className="py-2 pr-3">TOTAL</td>
@@ -756,6 +789,80 @@ function ResumoPorBasePanel({ periodo }: { periodo: Periodo }) {
       {q.error && (
         <p className="text-xs text-destructive">Erro ao carregar: {(q.error as Error).message}</p>
       )}
+
+      <DrillDialog
+        open={!!drill}
+        onClose={() => setDrill(null)}
+        metrica={drill?.metrica ?? null}
+        baseId={drill?.baseId ?? null}
+        periodo={periodo}
+        title={drill?.label ?? ""}
+      />
     </Card>
+  );
+}
+
+function labelMetrica(m: MetricaResumo): string {
+  switch (m) {
+    case "recebimentos": return "Recebimentos";
+    case "triados": return "Volumes triados";
+    case "devolucoes": return "Devoluções";
+    case "inventario": return "Inventário";
+    case "transferencias": return "Transferências";
+    case "contagens": return "Contagens";
+  }
+}
+
+function DrillDialog({
+  open, onClose, metrica, baseId, periodo, title,
+}: {
+  open: boolean;
+  onClose: () => void;
+  metrica: MetricaResumo | null;
+  baseId: string | null;
+  periodo: Periodo;
+  title: string;
+}) {
+  const fn = useServerFn(detalhesResumoPorBase);
+  const q = useQuery({
+    queryKey: ["drill", metrica, baseId, periodo],
+    queryFn: () => fn({ data: { metrica: metrica!, base_id: baseId ?? undefined, periodo, limit: 300 } }),
+    enabled: open && !!metrica,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {q.data ? `${q.data.total} registro(s) — ${new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(q.data.fim + "T00:00:00").toLocaleDateString("pt-BR")}` : "Carregando…"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 -mx-6 px-6">
+          {q.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+          {q.error && <p className="text-sm text-destructive">Erro: {(q.error as Error).message}</p>}
+          {q.data && q.data.itens.length === 0 && (
+            <p className="text-sm text-muted-foreground py-8 text-center">Sem registros no período.</p>
+          )}
+          <ul className="divide-y divide-border">
+            {(q.data?.itens ?? []).map((it) => (
+              <li key={it.id} className="py-2 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-sm truncate">{it.titulo}</div>
+                  {it.subtitulo && <div className="text-xs text-muted-foreground truncate">{it.subtitulo}</div>}
+                  {it.extra && <div className="text-[11px] text-muted-foreground/80 truncate">{it.extra}</div>}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-xs">{new Date(it.quando).toLocaleString("pt-BR")}</div>
+                  {it.base_codigo && <div className="text-[10px] text-muted-foreground font-mono">{it.base_codigo}</div>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

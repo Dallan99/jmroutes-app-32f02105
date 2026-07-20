@@ -750,3 +750,192 @@ export const resumoOperacionalPorBase = createServerFn({ method: "POST" })
 
     return { dia: inicio, periodo, inicio, fim, bases: rows, totais };
   });
+
+// ============================================================
+// Detalhes das métricas do resumo por base (drill-down)
+// ============================================================
+
+export type MetricaResumo =
+  | "recebimentos"
+  | "triados"
+  | "devolucoes"
+  | "inventario"
+  | "transferencias"
+  | "contagens";
+
+export type DetalheItem = {
+  id: string;
+  quando: string; // ISO
+  base_codigo: string | null;
+  base_nome: string | null;
+  titulo: string;   // linha principal
+  subtitulo?: string | null;
+  extra?: string | null;
+};
+
+export type DetalhesMetricaData = {
+  metrica: MetricaResumo;
+  periodo: "hoje" | "7d" | "30d";
+  inicio: string;
+  fim: string;
+  total: number;
+  itens: DetalheItem[];
+};
+
+const detalhesInput = z.object({
+  metrica: z.enum(["recebimentos", "triados", "devolucoes", "inventario", "transferencias", "contagens"]),
+  periodo: z.enum(["hoje", "7d", "30d"]).default("hoje"),
+  base_id: z.string().uuid().optional(),
+  limit: z.number().int().min(1).max(1000).default(300),
+});
+
+export const detalhesResumoPorBase = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => detalhesInput.parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<DetalhesMetricaData> => {
+    const { supabase } = context;
+
+    const hoje = new Date();
+    const fim = ymd(hoje);
+    const inicio =
+      data.periodo === "hoje"
+        ? fim
+        : ymd(new Date(hoje.getTime() - (data.periodo === "7d" ? 6 : 29) * 24 * 3600 * 1000));
+    const iniISO = `${inicio}T00:00:00.000Z`;
+    const fimISO = `${fim}T23:59:59.999Z`;
+
+    const { data: bases } = await supabase.from("bases").select("id, codigo, nome");
+    const bmap = new Map<string, { codigo: string; nome: string }>();
+    for (const b of bases ?? []) bmap.set(b.id, { codigo: b.codigo, nome: b.nome });
+
+    const itens: DetalheItem[] = [];
+
+    if (data.metrica === "recebimentos" || data.metrica === "triados") {
+      let q = supabase
+        .from("recebimentos")
+        .select("id, codigo_bipado, resultado, mensagem, base_id, created_at, data_operacional")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .order("created_at", { ascending: false })
+        .limit(data.limit);
+      if (data.base_id) q = q.eq("base_id", data.base_id);
+      if (data.metrica === "triados") q = q.eq("resultado", "ok");
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) {
+        const b = r.base_id ? bmap.get(r.base_id) : null;
+        itens.push({
+          id: r.id,
+          quando: r.created_at,
+          base_codigo: b?.codigo ?? null,
+          base_nome: b?.nome ?? null,
+          titulo: r.codigo_bipado ?? "—",
+          subtitulo: r.resultado,
+          extra: r.mensagem,
+        });
+      }
+    } else if (data.metrica === "devolucoes") {
+      let q = supabase
+        .from("devolucoes")
+        .select("id, shipment_codigo, rota, motorista, motivo, observacao, base_id, devolvido_em, cancelado")
+        .gte("devolvido_em", iniISO)
+        .lte("devolvido_em", fimISO)
+        .eq("cancelado", false)
+        .order("devolvido_em", { ascending: false })
+        .limit(data.limit);
+      if (data.base_id) q = q.eq("base_id", data.base_id);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) {
+        const b = r.base_id ? bmap.get(r.base_id) : null;
+        itens.push({
+          id: r.id,
+          quando: r.devolvido_em,
+          base_codigo: b?.codigo ?? null,
+          base_nome: b?.nome ?? null,
+          titulo: r.shipment_codigo ?? "—",
+          subtitulo: `${r.rota ?? "sem rota"} · ${r.motivo ?? "—"}`,
+          extra: r.motorista ?? r.observacao,
+        });
+      }
+    } else if (data.metrica === "inventario") {
+      let q = supabase
+        .from("inventario_leituras")
+        .select("id, codigo, base_id, bipado_em, cancelado, dia_operacional")
+        .gte("dia_operacional", inicio)
+        .lte("dia_operacional", fim)
+        .eq("cancelado", false)
+        .order("bipado_em", { ascending: false })
+        .limit(data.limit);
+      if (data.base_id) q = q.eq("base_id", data.base_id);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) {
+        const b = r.base_id ? bmap.get(r.base_id) : null;
+        itens.push({
+          id: r.id,
+          quando: r.bipado_em,
+          base_codigo: b?.codigo ?? null,
+          base_nome: b?.nome ?? null,
+          titulo: r.codigo ?? "—",
+          subtitulo: `Dia ${r.dia_operacional}`,
+        });
+      }
+    } else if (data.metrica === "transferencias") {
+      let q = supabase
+        .from("transferencias")
+        .select("id, codigo, service, motorista, placa, status, base_id, data_operacional, created_at, finalizada_em")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .neq("status", "cancelada")
+        .order("created_at", { ascending: false })
+        .limit(data.limit);
+      if (data.base_id) q = q.eq("base_id", data.base_id);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) {
+        const b = r.base_id ? bmap.get(r.base_id) : null;
+        itens.push({
+          id: r.id,
+          quando: r.created_at ?? r.finalizada_em ?? `${r.data_operacional}T00:00:00.000Z`,
+          base_codigo: b?.codigo ?? null,
+          base_nome: b?.nome ?? null,
+          titulo: `${r.codigo ?? "—"} · ${r.service ?? ""}`.trim(),
+          subtitulo: `${r.motorista ?? "—"} · ${r.placa ?? "—"}`,
+          extra: r.status,
+        });
+      }
+    } else if (data.metrica === "contagens") {
+      let q = supabase
+        .from("contagens")
+        .select("id, base_id, data_operacional, iniciada_em, finalizada_em, total_esperado, total_contado, divergencia")
+        .gte("data_operacional", inicio)
+        .lte("data_operacional", fim)
+        .order("iniciada_em", { ascending: false })
+        .limit(data.limit);
+      if (data.base_id) q = q.eq("base_id", data.base_id);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) {
+        const b = r.base_id ? bmap.get(r.base_id) : null;
+        itens.push({
+          id: r.id,
+          quando: r.iniciada_em ?? `${r.data_operacional}T00:00:00.000Z`,
+          base_codigo: b?.codigo ?? null,
+          base_nome: b?.nome ?? null,
+          titulo: `Contagem ${r.data_operacional}`,
+          subtitulo: `Esperado ${r.total_esperado ?? 0} · Contado ${r.total_contado ?? 0}`,
+          extra: (r.divergencia ?? 0) !== 0 ? `Divergência ${r.divergencia}` : "Sem divergência",
+        });
+      }
+    }
+
+    return {
+      metrica: data.metrica,
+      periodo: data.periodo,
+      inicio,
+      fim,
+      total: itens.length,
+      itens,
+    };
+  });
