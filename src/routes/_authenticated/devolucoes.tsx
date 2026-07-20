@@ -73,8 +73,21 @@ function DevolucoesGuard() {
   );
 }
 
+function hojeBRT(): string {
+  // YYYY-MM-DD no fuso America/Sao_Paulo, independente do fuso do navegador.
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(new Date());
+}
+
 function DevolucoesComHeader() {
-  const { base, diaOperacional } = useBaseOperacional();
+  const { base, diaOperacional, trocarDia } = useBaseOperacional();
+  const hoje = hojeBRT();
+  const diaDivergente = !!diaOperacional && diaOperacional !== hoje;
   return (
     <>
       <div className="border-b bg-muted/30 px-4 md:px-6 py-2 flex items-center gap-3 flex-wrap text-xs">
@@ -96,6 +109,20 @@ function DevolucoesComHeader() {
           </b>
         </span>
       </div>
+      {diaDivergente && (
+        <div className="border-b bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 px-4 md:px-6 py-2 flex items-start gap-3 flex-wrap text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span className="flex-1 min-w-[240px]">
+            O Dia Operacional está em{" "}
+            <b>{new Date(diaOperacional! + "T00:00:00").toLocaleDateString("pt-BR")}</b>, mas hoje é{" "}
+            <b>{new Date(hoje + "T00:00:00").toLocaleDateString("pt-BR")}</b>. Novas devoluções são
+            registradas com o horário atual e não aparecem em “Devoluções do dia” até você atualizar.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => trocarDia(hoje)}>
+            Atualizar para hoje
+          </Button>
+        </div>
+      )}
       <DevolucoesPage />
     </>
   );
