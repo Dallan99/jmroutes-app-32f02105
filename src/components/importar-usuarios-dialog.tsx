@@ -142,7 +142,9 @@ export function ImportarUsuariosDialog() {
     const first = rows[0].map((c) => c.trim().toLowerCase());
     const isHeader = first.includes("email") && first.includes("nome");
     const idxs = HEADER.map((h) => (isHeader ? first.indexOf(h) : HEADER.indexOf(h)));
-    const dataRows = isHeader ? rows.slice(1) : rows;
+    const dataRows = (isHeader ? rows.slice(1) : rows).filter(
+      (r) => !(r[0] ?? "").trim().startsWith("#"),
+    );
     return dataRows.map((cols, i) => {
       const get = (idx: number) => (idx >= 0 ? (cols[idx] ?? "").trim() : "");
       const item: Omit<Linha, "linha" | "erro"> = {
