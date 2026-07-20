@@ -1054,25 +1054,6 @@ function TriagemPage() {
             </div>
           </Card>
 
-          {/* Ocorrências / últimas leituras */}
-          <Card className="p-4 md:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-display text-sm uppercase tracking-wider text-muted-foreground">
-                Últimas 20 leituras
-              </h2>
-              <span className="text-xs text-muted-foreground">Atualizado em tempo real</span>
-            </div>
-            <div className="divide-y">
-              {(lista.data ?? []).map((r) => (
-                <Row key={r.id} r={r} />
-              ))}
-              {(lista.data?.length ?? 0) === 0 && (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  Nenhuma leitura ainda.
-                </div>
-              )}
-            </div>
-          </Card>
         </>
       )}
       <Dialog
