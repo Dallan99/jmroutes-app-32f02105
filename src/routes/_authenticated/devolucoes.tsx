@@ -87,7 +87,7 @@ function hojeBRT(): string {
 }
 
 function DevolucoesComHeader() {
-  const { base, diaOperacional, trocarDia } = useBaseOperacional();
+  const { base, diaOperacional, trocarDia, limpar } = useBaseOperacional();
   const hoje = hojeBRT();
   const diaDivergente = !!diaOperacional && diaOperacional !== hoje;
   return (
@@ -110,6 +110,14 @@ function DevolucoesComHeader() {
               : "—"}
           </b>
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto h-7 text-xs"
+          onClick={() => limpar()}
+        >
+          Trocar base / dia
+        </Button>
       </div>
       {diaDivergente && (
         <div className="border-b bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 px-4 md:px-6 py-2 flex items-start gap-3 flex-wrap text-xs">
