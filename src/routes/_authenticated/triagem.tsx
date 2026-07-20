@@ -365,9 +365,8 @@ function TriagemPage() {
         paused: false,
         sessionErr: s.sessionErr + 1,
       }));
-      toast.error(err instanceof Error ? err.message : "Falha na triagem.");
+      setBloqueioErro(err instanceof Error ? err.message : "Falha na triagem.");
       setTimeout(() => setFlash(null), 500);
-      inputRef.current?.focus();
     },
   });
 
