@@ -535,6 +535,10 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
       return [] as RotaTriagemDia[];
     }
 
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
     const PAGE_SIZE = 1000;
 
     const linhas: Array<{
@@ -545,10 +549,16 @@ export const triagemRotasDoDia = createServerFn({ method: "GET" })
     }> = [];
 
     for (let inicio = 0; ; inicio += PAGE_SIZE) {
-      const { data: pagina, error: paginaErro } = await supabase
+      // A consulta autenticada estoura timeout em importações grandes porque
+      // cada linha passa pelas policies/RLS. O acesso à importação já foi
+      // validado acima com o client autenticado; aqui usamos o client admin
+      // apenas para leitura agregada em memória, sem alterar dados ou schema.
+      const { data: pagina, error: paginaErro } = await supabaseAdmin
         .from("escalas")
         .select("shipment, planejada, otimizada, triado")
         .eq("importacao_id", impAtiva.id)
+        .not("shipment", "is", null)
+        .neq("shipment", "")
         .order("id", { ascending: true })
         .range(inicio, inicio + PAGE_SIZE - 1);
 
