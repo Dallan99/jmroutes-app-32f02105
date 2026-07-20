@@ -66,6 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RequireBaseOperacional } from "@/components/base-operacional-selector";
 import { useBaseOperacional } from "@/lib/base-operacional-context";
+import { ErroBloqueioOverlay } from "@/components/erro-bloqueio-overlay";
 
 export const Route = createFileRoute("/_authenticated/triagem")({
   head: () => ({ meta: [{ title: "Triagem — JM Transportes" }] }),
