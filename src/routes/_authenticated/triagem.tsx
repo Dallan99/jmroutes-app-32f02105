@@ -57,6 +57,7 @@ import {
   montarLinhasTriagemRota,
   type TriagemLinhaImpressao,
 } from "@/lib/relatorio";
+import { listarDiasOperacionais } from "@/lib/bases.functions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,7 +154,7 @@ function loadSession(): PersistedSession {
 
 function TriagemPage() {
   const qc = useQueryClient();
-  const { base, diaOperacional } = useBaseOperacional();
+  const { base, diaOperacional, trocarDia } = useBaseOperacional();
   const baseId = base!.id;
   const dataOperacional = diaOperacional!;
   const biparFn = useServerFn(biparTriagem);
@@ -163,6 +164,7 @@ function TriagemPage() {
   const pendentesFn = useServerFn(triagemShipmentsPendentes);
   const localizarFn = useServerFn(localizarShipmentTriagem);
   const concluirRessalvaFn = useServerFn(concluirRotaComRessalva);
+  const listarDiasFn = useServerFn(listarDiasOperacionais);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastRef = useRef<{ codigo: string; ts: number } | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -273,6 +275,11 @@ function TriagemPage() {
     refetchInterval: false,
     retry: 1,
     staleTime: 30000,
+  });
+  const diasImportados = useQuery({
+    queryKey: ["dias-operacionais", baseId],
+    queryFn: () => listarDiasFn({ data: { baseId } }),
+    staleTime: 60_000,
   });
 
   const rotaAtual =
@@ -650,6 +657,11 @@ function TriagemPage() {
   const totalTri = resumo.data?.totalTriados ?? 0;
   const pendentes = resumo.data?.pendentes ?? 0;
   const pct = totalPrev ? Math.round((totalTri / totalPrev) * 100) : 0;
+  const ultimoDiaImportado = diasImportados.data?.find((dia) => dia.versao_ativa != null) ?? null;
+  const diaSemImportacao =
+    resumo.data?.temImportacao === false &&
+    !!ultimoDiaImportado &&
+    ultimoDiaImportado.data_operacional !== dataOperacional;
 
 
   const flashClass = flash === "ok" ? "scan-flash-ok" : flash === "error" ? "scan-flash-error" : "";
@@ -681,6 +693,28 @@ function TriagemPage() {
             
           </div>
           <Progress value={pct} className="h-2" />
+
+          {diaSemImportacao && (
+            <Card className="p-4 border-warning/40 bg-warning/5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-start gap-3 text-sm">
+                <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Não há escala ativa neste dia operacional.</div>
+                  <div className="text-muted-foreground">
+                    Última importação da base: {new Date(ultimoDiaImportado.data_operacional + "T00:00:00").toLocaleDateString("pt-BR")} · {ultimoDiaImportado.total_linhas.toLocaleString("pt-BR")} IDs · {ultimoDiaImportado.total_rotas.toLocaleString("pt-BR")} rotas.
+                  </div>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => trocarDia(ultimoDiaImportado.data_operacional)}
+              >
+                Usar último dia importado
+              </Button>
+            </Card>
+          )}
 
           <Card className="p-4 md:p-5">
             <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
