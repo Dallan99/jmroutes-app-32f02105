@@ -260,7 +260,7 @@ function TriagemPage() {
   const resumo = useQuery({
     queryKey: ["triagem-resumo", baseId, dataOperacional],
     queryFn: () => resumoFn({ data: { baseId, dataOperacional } }),
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
   const lista = useQuery({
     queryKey: ["triagem-ultimas"],
@@ -270,7 +270,9 @@ function TriagemPage() {
   const rotas = useQuery({
     queryKey: ["triagem-rotas", baseId, dataOperacional],
     queryFn: () => rotasFn({ data: { baseId, dataOperacional } }),
-    refetchInterval: 5000,
+    refetchInterval: false,
+    retry: 1,
+    staleTime: 30000,
   });
 
   const rotaAtual =
@@ -766,6 +768,8 @@ function TriagemPage() {
             onAbrir={abrirRota}
             onDetalhes={(r) => setRotaDetalhe(r)}
             loading={rotas.isLoading}
+            error={rotas.error}
+            onRetry={() => rotas.refetch()}
           />
         </>
       ) : (
