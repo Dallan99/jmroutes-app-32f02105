@@ -113,6 +113,7 @@ function DevolucoesPage() {
   const [motivo, setMotivo] = useState<MotivoDevolucao>("cliente_ausente");
   const [obs, setObs] = useState("");
   const [rotaSessao, setRotaSessao] = useState("");
+  const [rotaDraft, setRotaDraft] = useState("");
   const [rotaInput, setRotaInput] = useState("");
   const [modoRapido, setModoRapido] = useState(false);
   const [motivoPadrao, setMotivoPadrao] = useState<MotivoDevolucao>("outros");
@@ -121,6 +122,13 @@ function DevolucoesPage() {
   const diaAtivo = diaHistorico || diaOperacional;
   const consultandoHoje = diaAtivo === diaOperacional;
   const rotaTravada = rotaSessao.trim().length > 0;
+  const iniciarRota = () => {
+    const v = rotaDraft.trim().toUpperCase();
+    if (!v) return;
+    setRotaSessao(v);
+    setRotaDraft("");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   const lista = useQuery({
     queryKey: ["devolucoes", base?.id, diaAtivo],
@@ -336,13 +344,19 @@ function DevolucoesPage() {
         <div className="mb-4 rounded-md border bg-muted/30 p-3 flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[220px]">
             <Label htmlFor="rota-sessao" className="text-xs">
-              Rota atual (obrigatória — travada até finalizar)
+              Rota atual (obrigatória — travada após iniciar)
             </Label>
             <Input
               id="rota-sessao"
-              value={rotaSessao}
-              onChange={(e) => setRotaSessao(e.target.value.toUpperCase())}
-              placeholder="Ex.: VN6_AM1"
+              value={rotaTravada ? rotaSessao : rotaDraft}
+              onChange={(e) => setRotaDraft(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !rotaTravada) {
+                  e.preventDefault();
+                  iniciarRota();
+                }
+              }}
+              placeholder="Ex.: VN6_AM1 (digite e pressione Enter ou Iniciar rota)"
               className="font-mono h-10 mt-1"
               readOnly={rotaTravada}
             />
@@ -353,16 +367,16 @@ function DevolucoesPage() {
               size="sm"
               onClick={() => {
                 setRotaSessao("");
+                setRotaDraft("");
                 setTimeout(() => inputRef.current?.focus(), 50);
               }}
             >
               Finalizar rota
             </Button>
           ) : (
-            <span className="text-[11px] text-amber-700 dark:text-amber-400 max-w-xs">
-              Informe a rota para liberar as bipagens. Ela ficará travada até você clicar em
-              <b> Finalizar rota</b>.
-            </span>
+            <Button size="sm" onClick={iniciarRota} disabled={rotaDraft.trim().length === 0}>
+              Iniciar rota
+            </Button>
           )}
           <div className="w-full flex items-center gap-3 flex-wrap pt-2 border-t mt-1">
             <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
