@@ -37,7 +37,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { meuPerfil } from "@/lib/recebimento.functions";
-import { useClock, formatDateTimeBR } from "@/lib/use-clock";
 import { toast } from "sonner";
 import { BaseOperacionalProvider, useBaseOperacional } from "@/lib/base-operacional-context";
 import { SeletorBaseDia } from "@/components/base-operacional-selector";
@@ -203,7 +202,6 @@ function AppSidebar({ roles }: { roles: Array<Role> }) {
 function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const now = useClock(1000);
   const { base, diaOperacional, limpar } = useBaseOperacional();
   const [trocarOpen, setTrocarOpen] = useState(false);
   const principal = roles.includes("admin")
@@ -231,7 +229,6 @@ function TopBar({ nome, roles }: { nome: string | null; roles: string[] }) {
   return (
     <header className="h-14 border-b bg-card flex items-center px-3 gap-3 sticky top-0 z-30">
       <SidebarTrigger />
-      <div className="hidden md:flex items-center text-xs text-muted-foreground font-mono">{formatDateTimeBR(now)}</div>
       <div className="ml-auto flex items-center gap-3">
         <div className="text-right leading-tight">
           <div className="text-sm font-medium">{nome ?? "—"}</div>
