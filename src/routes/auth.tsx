@@ -39,7 +39,6 @@ import heroImg from "@/assets/jm-hero.png.asset.json";
 import logoImg from "@/assets/jm-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
-  ssr: false,
   head: () => ({
     meta: [
       { title: "Entrar — JM Transportes" },
