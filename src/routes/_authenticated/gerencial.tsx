@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, detalhesResumoPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData, type MetricaResumo } from "@/lib/gerencial.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
+import { Printer, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
