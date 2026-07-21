@@ -57,14 +57,35 @@ export type VersaoImportacao = {
 export const listarBasesComResumo = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<BaseResumo[]> => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
     const hoje = new Date().toISOString().slice(0, 10);
 
-    const { data: bases, error } = await supabase
+    // Restringe a lista de bases: somente admin vê todas.
+    // Demais perfis (gerente, supervisor, operador) só enxergam as bases
+    // vinculadas em profiles.base_id ou user_bases.
+    const [{ data: rolesRows }, { data: perfil }, { data: extras }] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase.from("profiles").select("base_id").eq("id", userId).maybeSingle(),
+      supabase.from("user_bases").select("base_id").eq("user_id", userId),
+    ]);
+    const roles = (rolesRows ?? []).map((r) => r.role as string);
+    const acessoTotal = roles.includes("admin");
+
+    let basesQuery = supabase
       .from("bases")
       .select("id, codigo, nome, cidade, uf")
       .order("codigo");
+    if (!acessoTotal) {
+      const permitidas = new Set<string>();
+      if (perfil?.base_id) permitidas.add(perfil.base_id);
+      (extras ?? []).forEach((e) => e.base_id && permitidas.add(e.base_id));
+      if (permitidas.size === 0) return [];
+      basesQuery = basesQuery.in("id", Array.from(permitidas));
+    }
+
+    const { data: bases, error } = await basesQuery;
     if (error) throw new Error(error.message);
+
 
     const { data: imps } = await supabase
       .from("importacoes_escala")
