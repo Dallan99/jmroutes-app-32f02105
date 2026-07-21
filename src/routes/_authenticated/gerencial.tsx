@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { gerencialData, rotasPorBase, transferenciasGerencial, resumoOperacionalPorBase, detalhesResumoPorBase, type OperadorProd, type RotaBaseRow, type TransferenciasGerencialData, type MetricaResumo } from "@/lib/gerencial.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { abrirRelatorio, baixarCSV } from "@/lib/relatorio";
+import { Printer, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -830,6 +832,26 @@ function DrillDialog({
     enabled: open && !!metrica,
   });
 
+  const itens = q.data?.itens ?? [];
+  const periodoLabel = periodo === "hoje" ? "Hoje" : periodo === "7d" ? "Últimos 7 dias" : "Últimos 30 dias";
+  const subtitulo = q.data
+    ? `${title} — ${periodoLabel} (${new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(q.data.fim + "T00:00:00").toLocaleDateString("pt-BR")})`
+    : title;
+  const nomeArquivo = `gerencial_${metrica ?? "detalhe"}_${periodo}`;
+  const colunas = [
+    { header: "Registro", value: (r: typeof itens[number]) => r.titulo },
+    { header: "Detalhe", value: (r: typeof itens[number]) => r.subtitulo ?? "" },
+    { header: "Observação", value: (r: typeof itens[number]) => r.extra ?? "" },
+    { header: "Base", value: (r: typeof itens[number]) => r.base_codigo ?? "" },
+    { header: "Quando", value: (r: typeof itens[number]) => new Date(r.quando).toLocaleString("pt-BR") },
+  ];
+  const handleImprimir = () => {
+    abrirRelatorio({ titulo: title, subtitulo, nomeArquivo, colunas, linhas: itens, autoPrint: true, assinaturas: false });
+  };
+  const handleCsv = () => {
+    baixarCSV({ titulo: title, nomeArquivo, colunas, linhas: itens });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -840,14 +862,23 @@ function DrillDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={handleCsv} disabled={itens.length === 0}>
+            <Download className="w-4 h-4 mr-1.5" /> Baixar CSV
+          </Button>
+          <Button size="sm" onClick={handleImprimir} disabled={itens.length === 0}>
+            <Printer className="w-4 h-4 mr-1.5" /> Imprimir / PDF
+          </Button>
+        </div>
+
         <div className="overflow-y-auto flex-1 -mx-6 px-6">
           {q.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
           {q.error && <p className="text-sm text-destructive">Erro: {(q.error as Error).message}</p>}
-          {q.data && q.data.itens.length === 0 && (
+          {q.data && itens.length === 0 && (
             <p className="text-sm text-muted-foreground py-8 text-center">Sem registros no período.</p>
           )}
           <ul className="divide-y divide-border">
-            {(q.data?.itens ?? []).map((it) => (
+            {itens.map((it) => (
               <li key={it.id} className="py-2 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-sm truncate">{it.titulo}</div>
