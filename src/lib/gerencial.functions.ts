@@ -771,6 +771,7 @@ export type DetalheItem = {
   titulo: string;   // linha principal
   subtitulo?: string | null;
   extra?: string | null;
+  operador_nome?: string | null;
 };
 
 export type DetalhesMetricaData = {
@@ -778,6 +779,7 @@ export type DetalhesMetricaData = {
   periodo: "hoje" | "7d" | "30d";
   inicio: string;
   fim: string;
+  dia?: string | null;
   total: number;
   itens: DetalheItem[];
 };
@@ -786,6 +788,7 @@ const detalhesInput = z.object({
   metrica: z.enum(["recebimentos", "triados", "devolucoes", "inventario", "transferencias", "contagens"]),
   periodo: z.enum(["hoje", "7d", "30d"]).default("hoje"),
   base_id: z.string().uuid().optional(),
+  dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   limit: z.number().int().min(1).max(1000).default(300),
 });
 
