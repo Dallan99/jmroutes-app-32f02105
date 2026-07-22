@@ -714,6 +714,192 @@ export type Database = {
           },
         ]
       }
+      meli_importacoes: {
+        Row: {
+          arquivo_nome: string | null
+          created_at: string
+          finalizado_em: string | null
+          id: string
+          importado_por: string | null
+          iniciado_em: string
+          mensagem_erro: string | null
+          status: string
+          total_erros: number
+          total_pacotes: number
+          total_rotas: number
+          updated_at: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          created_at?: string
+          finalizado_em?: string | null
+          id?: string
+          importado_por?: string | null
+          iniciado_em?: string
+          mensagem_erro?: string | null
+          status?: string
+          total_erros?: number
+          total_pacotes?: number
+          total_rotas?: number
+          updated_at?: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          created_at?: string
+          finalizado_em?: string | null
+          id?: string
+          importado_por?: string | null
+          iniciado_em?: string
+          mensagem_erro?: string | null
+          status?: string
+          total_erros?: number
+          total_pacotes?: number
+          total_rotas?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meli_pacotes: {
+        Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          created_at: string
+          destinatario: string | null
+          endereco: string | null
+          id: string
+          ordem: number | null
+          printed_label: string | null
+          rota_id: string
+          shipment_id: string | null
+          status: string | null
+          tracking_id: string
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          created_at?: string
+          destinatario?: string | null
+          endereco?: string | null
+          id?: string
+          ordem?: number | null
+          printed_label?: string | null
+          rota_id: string
+          shipment_id?: string | null
+          status?: string | null
+          tracking_id: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          created_at?: string
+          destinatario?: string | null
+          endereco?: string | null
+          id?: string
+          ordem?: number | null
+          printed_label?: string | null
+          rota_id?: string
+          shipment_id?: string | null
+          status?: string | null
+          tracking_id?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meli_pacotes_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "meli_rotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meli_rotas: {
+        Row: {
+          carrier: string | null
+          cluster: string | null
+          created_at: string
+          data_rota: string | null
+          facility: string | null
+          id: string
+          origem_importacao: string | null
+          route_id: string
+          total_impressos: number
+          total_pacotes: number
+          updated_at: string
+        }
+        Insert: {
+          carrier?: string | null
+          cluster?: string | null
+          created_at?: string
+          data_rota?: string | null
+          facility?: string | null
+          id?: string
+          origem_importacao?: string | null
+          route_id: string
+          total_impressos?: number
+          total_pacotes?: number
+          updated_at?: string
+        }
+        Update: {
+          carrier?: string | null
+          cluster?: string | null
+          created_at?: string
+          data_rota?: string | null
+          facility?: string | null
+          id?: string
+          origem_importacao?: string | null
+          route_id?: string
+          total_impressos?: number
+          total_pacotes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meli_rotas_origem_importacao_fkey"
+            columns: ["origem_importacao"]
+            isOneToOne: false
+            referencedRelation: "meli_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meli_rotas_payload: {
+        Row: {
+          created_at: string
+          raw_payload: Json
+          rota_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          raw_payload: Json
+          rota_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          raw_payload?: Json
+          rota_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meli_rotas_payload_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: true
+            referencedRelation: "meli_rotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motoristas: {
         Row: {
           ativo: boolean
