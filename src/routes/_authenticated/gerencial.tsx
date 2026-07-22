@@ -825,23 +825,30 @@ function DrillDialog({
   periodo: Periodo;
   title: string;
 }) {
+  const [dia, setDia] = useState<string>("");
+  useEffect(() => { if (!open) setDia(""); }, [open, metrica, baseId, periodo]);
+
   const fn = useServerFn(detalhesResumoPorBase);
   const q = useQuery({
-    queryKey: ["drill", metrica, baseId, periodo],
-    queryFn: () => fn({ data: { metrica: metrica!, base_id: baseId ?? undefined, periodo, limit: 300 } }),
+    queryKey: ["drill", metrica, baseId, periodo, dia],
+    queryFn: () => fn({ data: { metrica: metrica!, base_id: baseId ?? undefined, periodo, dia: dia || undefined, limit: 300 } }),
     enabled: open && !!metrica,
   });
 
   const itens = q.data?.itens ?? [];
-  const periodoLabel = periodo === "hoje" ? "Hoje" : periodo === "7d" ? "Últimos 7 dias" : "Últimos 30 dias";
+  const periodoLabel = dia
+    ? `Dia ${new Date(dia + "T00:00:00").toLocaleDateString("pt-BR")}`
+    : periodo === "hoje" ? "Hoje" : periodo === "7d" ? "Últimos 7 dias" : "Últimos 30 dias";
   const subtitulo = q.data
     ? `${title} — ${periodoLabel} (${new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(q.data.fim + "T00:00:00").toLocaleDateString("pt-BR")})`
     : title;
-  const nomeArquivo = `gerencial_${metrica ?? "detalhe"}_${periodo}`;
+  const nomeArquivo = `gerencial_${metrica ?? "detalhe"}_${dia || periodo}`;
+  const isDevolucoes = metrica === "devolucoes";
   const colunas = [
     { header: "Registro", value: (r: typeof itens[number]) => r.titulo },
     { header: "Detalhe", value: (r: typeof itens[number]) => r.subtitulo ?? "" },
     { header: "Observação", value: (r: typeof itens[number]) => r.extra ?? "" },
+    ...(isDevolucoes ? [{ header: "Recebido por", value: (r: typeof itens[number]) => r.operador_nome ?? "—" }] : []),
     { header: "Base", value: (r: typeof itens[number]) => r.base_codigo ?? "" },
     { header: "Quando", value: (r: typeof itens[number]) => new Date(r.quando).toLocaleString("pt-BR") },
   ];
@@ -858,11 +865,24 @@ function DrillDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {q.data ? `${q.data.total} registro(s) — ${new Date(q.data.inicio + "T00:00:00").toLocaleDateString("pt-BR")} → ${new Date(q.data.fim + "T00:00:00").toLocaleDateString("pt-BR")}` : "Carregando…"}
+            {q.data ? `${q.data.total} registro(s) — ${periodoLabel}` : "Carregando…"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-xs text-muted-foreground flex items-center gap-1.5">
+            Filtrar por dia:
+            <input
+              type="date"
+              value={dia}
+              onChange={(e) => setDia(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            />
+          </label>
+          {dia && (
+            <Button size="sm" variant="ghost" onClick={() => setDia("")}>Limpar dia</Button>
+          )}
+          <div className="flex-1" />
           <Button size="sm" variant="outline" onClick={handleCsv} disabled={itens.length === 0}>
             <Download className="w-4 h-4 mr-1.5" /> Baixar CSV
           </Button>
@@ -870,6 +890,7 @@ function DrillDialog({
             <Printer className="w-4 h-4 mr-1.5" /> Imprimir / PDF
           </Button>
         </div>
+
 
         <div className="overflow-y-auto flex-1 -mx-6 px-6">
           {q.isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
@@ -884,6 +905,11 @@ function DrillDialog({
                   <div className="font-mono text-sm truncate">{it.titulo}</div>
                   {it.subtitulo && <div className="text-xs text-muted-foreground truncate">{it.subtitulo}</div>}
                   {it.extra && <div className="text-[11px] text-muted-foreground/80 truncate">{it.extra}</div>}
+                  {isDevolucoes && (
+                    <div className="text-[11px] text-muted-foreground/80 truncate">
+                      Recebido por: <span className="font-medium text-foreground">{it.operador_nome ?? "—"}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-xs">{new Date(it.quando).toLocaleString("pt-BR")}</div>

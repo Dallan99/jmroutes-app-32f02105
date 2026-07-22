@@ -771,6 +771,7 @@ export type DetalheItem = {
   titulo: string;   // linha principal
   subtitulo?: string | null;
   extra?: string | null;
+  operador_nome?: string | null;
 };
 
 export type DetalhesMetricaData = {
@@ -778,6 +779,7 @@ export type DetalhesMetricaData = {
   periodo: "hoje" | "7d" | "30d";
   inicio: string;
   fim: string;
+  dia?: string | null;
   total: number;
   itens: DetalheItem[];
 };
@@ -786,6 +788,7 @@ const detalhesInput = z.object({
   metrica: z.enum(["recebimentos", "triados", "devolucoes", "inventario", "transferencias", "contagens"]),
   periodo: z.enum(["hoje", "7d", "30d"]).default("hoje"),
   base_id: z.string().uuid().optional(),
+  dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   limit: z.number().int().min(1).max(1000).default(300),
 });
 
@@ -796,9 +799,10 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
     const { supabase } = context;
 
     const hoje = new Date();
-    const fim = ymd(hoje);
-    const inicio =
-      data.periodo === "hoje"
+    const fim = data.dia ?? ymd(hoje);
+    const inicio = data.dia
+      ? data.dia
+      : data.periodo === "hoje"
         ? fim
         : ymd(new Date(hoje.getTime() - (data.periodo === "7d" ? 6 : 29) * 24 * 3600 * 1000));
     const iniISO = `${inicio}T00:00:00.000Z`;
@@ -837,7 +841,7 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
     } else if (data.metrica === "devolucoes") {
       let q = supabase
         .from("devolucoes")
-        .select("id, shipment_codigo, rota, motorista, motivo, observacao, base_id, devolvido_em, cancelado")
+        .select("id, shipment_codigo, rota, motorista, motivo, observacao, base_id, devolvido_em, cancelado, devolvido_por")
         .gte("devolvido_em", iniISO)
         .lte("devolvido_em", fimISO)
         .eq("cancelado", false)
@@ -846,8 +850,17 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
       if (data.base_id) q = q.eq("base_id", data.base_id);
       const { data: rows, error } = await q;
       if (error) throw new Error(error.message);
+      const userIds = Array.from(
+        new Set((rows ?? []).map((r) => r.devolvido_por).filter(Boolean)),
+      ) as string[];
+      const nomes = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("id, nome").in("id", userIds);
+        (profs ?? []).forEach((p) => nomes.set(p.id as string, p.nome as string));
+      }
       for (const r of rows ?? []) {
         const b = r.base_id ? bmap.get(r.base_id) : null;
+        const operador = r.devolvido_por ? (nomes.get(r.devolvido_por) ?? null) : null;
         itens.push({
           id: r.id,
           quando: r.devolvido_em,
@@ -855,7 +868,8 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
           base_nome: b?.nome ?? null,
           titulo: r.shipment_codigo ?? "—",
           subtitulo: `${r.rota ?? "sem rota"} · ${r.motivo ?? "—"}`,
-          extra: r.motorista ?? r.observacao,
+          extra: [r.motorista, r.observacao].filter(Boolean).join(" · ") || null,
+          operador_nome: operador,
         });
       }
     } else if (data.metrica === "inventario") {
@@ -935,6 +949,7 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
       periodo: data.periodo,
       inicio,
       fim,
+      dia: data.dia ?? null,
       total: itens.length,
       itens,
     };
