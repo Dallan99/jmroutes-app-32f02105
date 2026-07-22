@@ -841,7 +841,7 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
     } else if (data.metrica === "devolucoes") {
       let q = supabase
         .from("devolucoes")
-        .select("id, shipment_codigo, rota, motorista, motivo, observacao, base_id, devolvido_em, cancelado")
+        .select("id, shipment_codigo, rota, motorista, motivo, observacao, base_id, devolvido_em, cancelado, devolvido_por")
         .gte("devolvido_em", iniISO)
         .lte("devolvido_em", fimISO)
         .eq("cancelado", false)
@@ -850,8 +850,17 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
       if (data.base_id) q = q.eq("base_id", data.base_id);
       const { data: rows, error } = await q;
       if (error) throw new Error(error.message);
+      const userIds = Array.from(
+        new Set((rows ?? []).map((r) => r.devolvido_por).filter(Boolean)),
+      ) as string[];
+      const nomes = new Map<string, string>();
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from("profiles").select("id, nome").in("id", userIds);
+        (profs ?? []).forEach((p) => nomes.set(p.id as string, p.nome as string));
+      }
       for (const r of rows ?? []) {
         const b = r.base_id ? bmap.get(r.base_id) : null;
+        const operador = r.devolvido_por ? (nomes.get(r.devolvido_por) ?? null) : null;
         itens.push({
           id: r.id,
           quando: r.devolvido_em,
@@ -859,7 +868,8 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
           base_nome: b?.nome ?? null,
           titulo: r.shipment_codigo ?? "—",
           subtitulo: `${r.rota ?? "sem rota"} · ${r.motivo ?? "—"}`,
-          extra: r.motorista ?? r.observacao,
+          extra: [r.motorista, r.observacao].filter(Boolean).join(" · ") || null,
+          operador_nome: operador,
         });
       }
     } else if (data.metrica === "inventario") {
