@@ -36,8 +36,6 @@ export function BaseOperacionalProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      // Migração: descarta seleção antiga persistida em localStorage,
-      // para que Admin/Gerente escolham a base explicitamente.
       if (typeof window !== "undefined") {
         try {
           window.localStorage.removeItem(STORAGE_KEY);
@@ -48,9 +46,19 @@ export function BaseOperacionalProvider({ children }: { children: ReactNode }) {
       const raw = storage()?.getItem(STORAGE_KEY);
       if (!raw) return;
       const s = JSON.parse(raw) as { base: BaseSelecionada; diaOperacional: string };
-      if (s?.base?.id && s?.diaOperacional) {
+      if (s?.base?.id) {
         setBase(s.base);
-        setDia(s.diaOperacional);
+        // Sempre inicia no dia atual (fuso BRT); usuário pode trocar via seletor.
+        const hojeBRT = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+        setDia(hojeBRT);
+        try {
+          storage()?.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ base: s.base, diaOperacional: hojeBRT }),
+          );
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       /* ignore */
