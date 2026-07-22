@@ -799,9 +799,10 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
     const { supabase } = context;
 
     const hoje = new Date();
-    const fim = ymd(hoje);
-    const inicio =
-      data.periodo === "hoje"
+    const fim = data.dia ?? ymd(hoje);
+    const inicio = data.dia
+      ? data.dia
+      : data.periodo === "hoje"
         ? fim
         : ymd(new Date(hoje.getTime() - (data.periodo === "7d" ? 6 : 29) * 24 * 3600 * 1000));
     const iniISO = `${inicio}T00:00:00.000Z`;
