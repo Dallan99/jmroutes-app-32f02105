@@ -949,6 +949,7 @@ export const detalhesResumoPorBase = createServerFn({ method: "POST" })
       periodo: data.periodo,
       inicio,
       fim,
+      dia: data.dia ?? null,
       total: itens.length,
       itens,
     };
