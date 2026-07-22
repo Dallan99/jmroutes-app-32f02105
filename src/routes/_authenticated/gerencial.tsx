@@ -905,6 +905,11 @@ function DrillDialog({
                   <div className="font-mono text-sm truncate">{it.titulo}</div>
                   {it.subtitulo && <div className="text-xs text-muted-foreground truncate">{it.subtitulo}</div>}
                   {it.extra && <div className="text-[11px] text-muted-foreground/80 truncate">{it.extra}</div>}
+                  {isDevolucoes && (
+                    <div className="text-[11px] text-muted-foreground/80 truncate">
+                      Recebido por: <span className="font-medium text-foreground">{it.operador_nome ?? "—"}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-xs">{new Date(it.quando).toLocaleString("pt-BR")}</div>
