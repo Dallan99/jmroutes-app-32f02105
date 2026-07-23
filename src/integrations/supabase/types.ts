@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      _meli_test_out: {
+        Row: {
+          created_at: string | null
+          extra: Json | null
+          result: Json | null
+          step: string
+        }
+        Insert: {
+          created_at?: string | null
+          extra?: Json | null
+          result?: Json | null
+          step: string
+        }
+        Update: {
+          created_at?: string | null
+          extra?: Json | null
+          result?: Json | null
+          step?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           acao: string
