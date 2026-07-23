@@ -1703,6 +1703,7 @@ export type Database = {
       }
     }
     Functions: {
+      _meli_safe_int: { Args: { p: string }; Returns: number }
       anexar_evidencia_transferencia: {
         Args: {
           p_etapa: string
@@ -1751,6 +1752,26 @@ export type Database = {
         Returns: boolean
       }
       inventario_global_access: { Args: { _user_id: string }; Returns: boolean }
+      meli_detalhar_rota: {
+        Args: { p_limit?: number; p_offset?: number; p_rota_id: string }
+        Returns: Json
+      }
+      meli_importar_rota: {
+        Args: { p_arquivo_nome?: string; p_payload: Json }
+        Returns: Json
+      }
+      meli_listar_rotas: {
+        Args: {
+          p_busca?: string
+          p_cluster?: string
+          p_data_ate?: string
+          p_data_de?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: Json
+      }
+      meli_pode_operar: { Args: never; Returns: boolean }
       registrar_evento_transferencia: {
         Args: {
           p_etapa: string
